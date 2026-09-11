@@ -10,7 +10,9 @@ de los ayuntamientos (caché 1h por adaptador) y filtra verbenas con patrones.
   ordenando y separando próximas/celebradas en el navegador.
 - La página replica el formato de DeBelingo (fondo oscuro, cabecera azul→púrpura,
   días amarillos agrupados, tarjetas con borde lateral por tipo, leyenda,
-  detalle expandible con Cómo llegar/TITSA/fuente oficial). Sin honeypots ni
+  detalle expandible con Cómo llegar/TITSA/fuente oficial). Orden de más nueva
+  a más vieja. OJO Astro: el `<style>` lleva `is:global` porque las tarjetas
+  se inyectan por JS (con scope no les aplica el CSS). Sin honeypots ni
   marcas de agua: aquí el contenido es propio.
 - Lógica: `src/lib/classifier.ts` (patrones + `partirPorDias` + `tipoDeEvento`),
   adaptadores `src/lib/arona.ts` / `src/lib/adeje.ts` / `src/lib/tegueste.ts`,

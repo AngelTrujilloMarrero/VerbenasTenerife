@@ -17,7 +17,9 @@ const fuentes = (filtro
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Verbenas Tenerife — Próximas Verbenas</title>
-  <style>
+  <!-- is:global: las tarjetas se inyectan por JS sin el atributo de scope
+    de Astro; con estilo encapsulado quedarían sin CSS (iconos gigantes). -->
+  <style is:global>
     * { box-sizing: border-box; }
     body { margin: 0; font-family: system-ui, -apple-system, sans-serif; background: #111827; color: #fff; }
     a { color: #93c5fd; }
@@ -190,7 +192,8 @@ const fuentes = (filtro
       const f = aFecha(day);
       return `${DIAS[f.getUTCDay()]} ${String(f.getUTCDate()).padStart(2, '0')} DE ${MESES[f.getUTCMonth()]}`;
     };
-    const ord = (a, b) => (aFecha(a.day) - aFecha(b.day)) || String(a.hora).localeCompare(String(b.hora));
+    // Orden: de más nueva a más vieja (al revés que DeBelingo).
+    const ord = (a, b) => (aFecha(b.day) - aFecha(a.day)) || String(b.hora).localeCompare(String(a.hora));
 
     const mapsUrl = (v, mode) => {
       const addr = v.lugar ? `${v.lugar}, ${v.municipio}, Tenerife` : `${v.municipio}, Tenerife`;
@@ -230,10 +233,11 @@ const fuentes = (filtro
     function render() {
       const fut = todas.filter((v) => v.futura).sort(ord);
       const pas = todas.filter((v) => !v.futura).sort(ord);
-      // Agrupa por día como DeBelingo
+      // Agrupa por día como DeBelingo, pero de más nuevo a más viejo
       const grupos = {};
       fut.forEach((v) => { (grupos[v.day || ''] = grupos[v.day || ''] || []).push(v); });
-      lista.innerHTML = Object.keys(grupos).sort().map((day) => `
+      const dias = Object.keys(grupos).sort((x, y) => (aFecha(y) - aFecha(x)) || y.localeCompare(x));
+      lista.innerHTML = dias.map((day) => `
         <section class="dia">
           <div class="dia-titulo"><h3>${svgCal}<span>${esc(nombreDia(day))}</span>${svgCal}</h3></div>
           ${grupos[day].map(tarjeta).join('')}
