@@ -2,6 +2,7 @@
 // Estrategia: pdfjs-dist en local. Si el PDF es escaneado (sin texto),
 // se marca y queda para Fase 2 (Gemini Vision free-tier), no se silencia.
 import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs';
+import { fetchBytes } from './http.js';
 
 export interface PdfTexto {
   url: string;
@@ -18,11 +19,7 @@ export async function obtenerTextoPdf(url: string, maxBytes = 30 * 1024 * 1024):
   const hit = cache.get(url);
   if (hit && Date.now() - hit.at < TTL) return hit.pdf;
 
-  const r = await fetch(url, {
-    headers: { 'User-Agent': 'VerbenasTenerife/0.1 (piloto; contacto admin)' }
-  });
-  if (!r.ok) throw new Error(`PDF HTTP ${r.status} en ${url}`);
-  const buf = new Uint8Array(await r.arrayBuffer());
+  const buf = await fetchBytes(url, 120000);
   if (buf.length > maxBytes) throw new Error(`PDF demasiado grande (${buf.length} bytes): ${url}`);
 
   const doc = await pdfjs.getDocument({ data: buf, useSystemFonts: true }).promise;

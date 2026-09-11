@@ -29,7 +29,7 @@ interface EoEv { title?: string; start?: string; url?: string }
 async function eventosEO(): Promise<EoEv[]> {
   const f = (d: Date) => d.toISOString().slice(0, 10);
   const url = `${AJAX}?action=eventorganiser-fullcal&start=${f(new Date())}&end=${f(new Date(Date.now() + 60 * 864e5))}&event_category=&event_venue=`;
-  const r = await fetch(url, { headers: { 'User-Agent': UA } });
+  const r = await fetch(url, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(25000) });
   const j = await r.json().catch(() => []);
   return Array.isArray(j) ? j : [];
 }

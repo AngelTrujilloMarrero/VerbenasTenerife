@@ -37,7 +37,7 @@ interface TecEv {
 async function eventosTEC(): Promise<TecEv[]> {
   const f = (d: Date) => d.toISOString().slice(0, 10);
   const url = `${TEC}?start_date=${f(new Date())}&end_date=${f(new Date(Date.now() + 90 * 864e5))}&per_page=50&status=publish`;
-  const r = await fetch(url, { headers: { 'User-Agent': UA } });
+  const r = await fetch(url, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(25000) });
   if (!r.ok) throw new Error(`TEC HTTP ${r.status}`);
   const j = await r.json().catch(() => ({}));
   return Array.isArray(j?.events) ? j.events : [];
