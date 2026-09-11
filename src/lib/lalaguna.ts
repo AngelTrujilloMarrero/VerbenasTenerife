@@ -4,6 +4,7 @@ import {
   mesANum,
   partirPorDias,
   extraerSubEventos,
+  posEn,
   tipoDeEvento
 } from './classifier.js';
 import { fetchText } from './http.js';
@@ -53,12 +54,15 @@ function ventana(sec: string, titulo: string, radio = 600): string {
   if (idx === -1) return sec.slice(0, 1200);
   return sec.slice(Math.max(0, idx - radio), idx + titulo.length + radio);
 }
-/** Lugar más cercano antes del título dentro de la sección ("En la Plaza del Cristo"). */
+/** Lugar más cercano ANTES del título: gana la ÚLTIMA mención de la ventana. */
 function lugarCercano(seccion: string, titulo: string): string {
-  const idx = seccion.indexOf(titulo.slice(0, 30));
+  const idx = posEn(seccion, titulo);
   const prev = idx === -1 ? seccion.slice(0, 600) : seccion.slice(Math.max(0, idx - 400), idx);
-  const m = prev.match(/(Plaza del Cristo|Plaza de [^.\n,]{2,40}|Cancha [^.\n,]{2,30}|Teatro [^.\n,]{2,30}|Casco [^.\n,]{2,20})/i);
-  return m ? m[1].trim() : 'La Laguna';
+  const re = /(Plaza del Cristo|Plaza de [^.\n,]{2,40}|Cancha [^.\n,]{2,30}|Teatro [^.\n,]{2,30}|Casco [^.\n,]{2,20})/gi;
+  let m: RegExpExecArray | null;
+  let ultimo = '';
+  while ((m = re.exec(prev)) !== null) ultimo = m[1].trim();
+  return ultimo || 'La Laguna';
 }
 
 export async function obtenerVerbenasLaLaguna(): Promise<Verbena[]> {

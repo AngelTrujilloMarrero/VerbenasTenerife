@@ -4,6 +4,7 @@ import { GRANADILLA_URL, obtenerVerbenasGranadilla } from './granadilla.js';
 import { GUIADEISORA_URL, obtenerVerbenasGuiaDeIsora } from './guiadeisora.js';
 import { LAGENDA_URL, obtenerVerbenasLagenda } from './lagenda.js';
 import { LALAGUNA_URL, obtenerVerbenasLaLaguna } from './lalaguna.js';
+import { SANTACRUZ_URL, obtenerVerbenasSantaCruz } from './santacruz.js';
 import { TEGUESTE_URL, obtenerVerbenasTegueste } from './tegueste.js';
 import { normTxt } from './municipios.js';
 import { porFecha, type Fuente, type Verbena } from './types.js';
@@ -18,19 +19,33 @@ export const FUENTES: Fuente[] = [
   { id: 'lalaguna', nombre: 'La Laguna', agendaUrl: LALAGUNA_URL, obtener: obtenerVerbenasLaLaguna },
   { id: 'guiadeisora', nombre: 'Guía de Isora', agendaUrl: GUIADEISORA_URL, obtener: obtenerVerbenasGuiaDeIsora },
   { id: 'granadilla', nombre: 'Granadilla de Abona', agendaUrl: GRANADILLA_URL, obtener: obtenerVerbenasGranadilla },
+  { id: 'santacruz', nombre: 'Santa Cruz de Tenerife', agendaUrl: SANTACRUZ_URL, obtener: obtenerVerbenasSantaCruz },
   { id: 'lagenda', nombre: 'Lagenda', agendaUrl: LAGENDA_URL, obtener: obtenerVerbenasLagenda }
 ];
 
 export type { Verbena };
 
-const STOPW = new Set(['de', 'la', 'el', 'las', 'los', 'del', 'en', 'con', 'por', 'una', 'uno', 'y', 'al', 'fin', 'gran', 'san', 'santa']);
+const STOPW = new Set(['de', 'la', 'el', 'las', 'los', 'del', 'en', 'con', 'por', 'una', 'uno', 'y', 'al', 'fin', 'gran', 'san', 'santa',
+  // Genéricos musicales: "orquesta" en común NO significa mismo baile
+  // (Kadetes 22:30 vs Acapulco 22:30). "Popular" sí se conserva.
+  'orquesta', 'orquestas', 'grupo', 'grupos', 'amenizado', 'amenizada', 'amenizados', 'amenizadas',
+  // Lugares genéricos: dos bailes en la misma plaza NO son el mismo baile.
+  // (Solo cuentan para el veto por lugar distinto, no para el solape.)
+  'plaza', 'calle', 'parque', 'teatro', 'iglesia', 'avenida', 'recinto', 'cancha',
+  'auditorio', 'ermita', 'parroquia', 'plazoleta', 'pabellon', 'campo', 'puente']);
 
 function toks(s: string): Set<string> {
   return new Set(normTxt(s).split(' ').filter((w) => w.length > 3 && !STOPW.has(w)));
 }
 
+/** Lugar normalizado (sin ", Municipio"); '' si es el fallback = municipio. */
+function normLugar(v: Verbena): string {
+  return normTxt(v.lugar.replace(new RegExp(',?\\s*' + v.municipio + '$', 'i'), '')).trim();
+}
+
 /** ¿Es `b` la misma verbena ya vista en `a`? Mismo municipio+día y
- *  (misma hora con solape, u orquesta común, o ≥2 palabras del título). */
+ *  (orquesta común o ≥2 palabras del título). Con lugares reales distintos
+ *  se veta salvo solape fuerte (orquesta o ≥3 palabras). */
 function esDuplicada(a: Verbena, b: Verbena): boolean {
   if (normTxt(a.municipio) !== normTxt(b.municipio)) return false;
   if (!a.day || a.day !== b.day) return false;
@@ -40,12 +55,26 @@ function esDuplicada(a: Verbena, b: Verbena): boolean {
   const oa = toks((a.orquestas || []).join(' ')), ob = toks((b.orquestas || []).join(' '));
   let orqs = 0;
   for (const w of oa) if (ob.has(w)) orqs++;
-  if (orqs >= 1 || comunes >= 2) return true;
-  return !!a.hora && a.hora === b.hora && (comunes >= 1 || (!ta.size && !tb.size));
+  const la = normLugar(a), lb = normLugar(b);
+  if (la && lb && la !== lb && !(orqs >= 1 || comunes >= 3)) return false;
+  return orqs >= 1 || comunes >= 2;
+}
+
+/** Fusiona duplicados: prefiere la que tiene hora, une orquestas, motivos y mejor score. */
+function fusionar(a: Verbena, b: Verbena): Verbena {
+  const conHora = a.hora ? a : b.hora ? b : a;
+  const otra = conHora === a ? b : a;
+  const orq = [...conHora.orquestas];
+  for (const o of otra.orquestas) {
+    if (!orq.some((x) => x.toLowerCase() === o.toLowerCase())) orq.push(o);
+  }
+  return { ...conHora, orquestas: orq, score: Math.max(a.score, b.score),
+    motivos: [...new Set([...a.motivos, ...b.motivos])] };
 }
 
 /** Agrega todas las fuentes en paralelo; si una falla, las demás siguen.
- *  Lagenda solo APORTA lo que no esté ya cubierto por un ayuntamiento. */
+ *  Deduplica en general (prosa+agenda del mismo programa, lagenda vs
+ *  ayuntamientos): gana la primera fuente, fusionando hora/orquestas. */
 export async function obtenerVerbenas(municipio?: string): Promise<Verbena[]> {
   const fuentes = municipio
     ? FUENTES.filter((f) => f.id === municipio.toLowerCase())
@@ -58,11 +87,15 @@ export async function obtenerVerbenas(municipio?: string): Promise<Verbena[]> {
       return;
     }
     for (const v of r.value) {
-      if (fuentes[i].id === 'lagenda' && todas.some((t) => esDuplicada(t, v))) {
-        console.log(`lagenda duplicada (gana ayuntamiento): ${v.day} ${v.titulo.slice(0, 50)}`);
-        continue;
+      const dup = todas.findIndex((t) => esDuplicada(t, v));
+      if (dup === -1) {
+        todas.push(v);
+      } else {
+        todas[dup] = fusionar(todas[dup], v);
+        if (fuentes[i].id === 'lagenda') {
+          console.log(`lagenda duplicada (fusionada): ${v.day} ${v.titulo.slice(0, 50)}`);
+        }
       }
-      todas.push(v);
     }
   });
   return todas.sort(porFecha);

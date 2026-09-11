@@ -28,10 +28,12 @@ de los ayuntamientos (caché 1h por adaptador) y filtra verbenas con patrones.
   los archives estáticos de DeBelingo). Mencionar una suma +5. Purgados
   topónimos y genéricos ("Tenerife", "Calle", "Sergio"...) para no crear FPs.
 
-Estado: 34 eventos en 9 municipios (Granadilla 8 = 2 del ayuntamiento + 7 de
-lagenda − 1 duplicado; 25 futuras). Granadilla usa TEC REST
-(`/wp-json/tribe/events/v1/events`, patrón para cualquier WP con ese plugin)
-+ noticias de fiestas (El Médano: verbena 19-09 y gran baile 20-09).
+Estado: 48 eventos en 10 municipios (Santa Cruz 13 del blog + programas
+fijos; 28 futuras). Santa Cruz: días flexibles, bailes sin hora con hora
+previa, penalty religioso solo sin mención explícita, dedup general con fusión.
+- Exportar agenda: botón 📥 genera PNG de la semana (ayer→domingo) con
+  html2canvas + modal Compartir/Descargar (adaptado de DeBelingo, sin Firebase).
+Siguiente paso: 7º ayuntamiento o guardar en Firebase con el modelo `Event`.
 - lagenda.org (`src/lib/lagenda.ts`): índice planfinde + programas con días y
   horas ("23:00 - Gran Baile..."). Respeto a robots (pausa entre detalles),
   prioriza fechas próximas, resuelve municipio (`municipios.ts`) y deduplica.

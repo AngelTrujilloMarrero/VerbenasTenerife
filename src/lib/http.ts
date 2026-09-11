@@ -26,7 +26,23 @@ export function textoConSaltos(html: string): string {
     .replace(/<style[\s\S]*?<\/style>/gi, ' ')
     .replace(/<[^>]+>/g, ' ')
     .split('\n')
-    .map((l) => l.replace(/[\s\u00A0]+/g, ' ').trim())
+    .map((l) => decodificarEntidades(l).replace(/[\s\u00A0]+/g, ' ').trim())
     .filter((l) => l.length > 0)
     .join('\n');
+}
+
+/** Decodifica entidades HTML (&nbsp;, &amp;, &mdash;...). Sin esto los
+ *  títulos salen con "Verbena y&nbsp;el&nbsp;domingo". */
+export function decodificarEntidades(s: string): string {
+  return s
+    .replace(/&nbsp;|&#160;/gi, ' ')
+    .replace(/&amp;|&#38;/gi, '&')
+    .replace(/&lt;|&#60;/gi, '<')
+    .replace(/&gt;|&#62;/gi, '>')
+    .replace(/&quot;|&#34;/gi, '"')
+    .replace(/&#39;|&apos;/gi, "'")
+    .replace(/&ndash;|&#8211;/gi, '-')
+    .replace(/&mdash;|&#8212;/gi, '-')
+    .replace(/&hellip;|&#8230;/gi, '...')
+    .replace(/&[a-z]+;/gi, ' ');
 }

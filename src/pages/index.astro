@@ -95,6 +95,14 @@ const fuentes = (filtro
       color: #f59e0b; font-weight: 700; font-size: 14px; }
     .pie small { display: block; color: #9ca3af; font-weight: 400; margin-top: 4px; }
     .vacio { text-align: center; color: #9ca3af; padding: 40px 0; }
+    .btn-agenda { background: linear-gradient(to right, #3b82f6, #a855f7); color: #fff; border: none;
+      border-radius: 8px; padding: 8px 18px; font-size: 14px; font-weight: 700; cursor: pointer; }
+    .modal { position: fixed; inset: 0; background: rgba(0,0,0,.85); z-index: 100;
+      display: flex; align-items: center; justify-content: center; padding: 16px; }
+    .modal-box { background: #1f2937; border-radius: 12px; padding: 16px; max-width: 560px; width: 100%;
+      max-height: 90vh; overflow: auto; text-align: center; }
+    .modal-box h3 { margin: 0 0 12px; }
+    .modal-box img { max-width: 100%; border-radius: 8px; background: #111827; }
   </style>
 </head>
 <body>
@@ -111,6 +119,22 @@ const fuentes = (filtro
   </header>
 
   <nav class="nav-muni" id="nav-muni"></nav>
+
+  <div style="text-align:center;margin:4px 0 0">
+    <button id="btn-agenda" class="btn-agenda">📥 Exportar agenda (semana)</button>
+  </div>
+
+  <div id="modal-agenda" class="modal" style="display:none">
+    <div class="modal-box">
+      <h3>Agenda de la semana</h3>
+      <img id="img-agenda" alt="Agenda exportada" />
+      <div class="btns" style="justify-content:center">
+        <button id="btn-compartir" class="btn btn-fuente">📤 Compartir</button>
+        <button id="btn-descargar" class="btn btn-llegar">⬇️ Descargar</button>
+        <button id="btn-cerrar" class="btn">Cerrar</button>
+      </div>
+    </div>
+  </div>
 
   <section class="progreso">
     <div id="progreso-texto">Preparando…</div>
@@ -365,6 +389,104 @@ const fuentes = (filtro
       );
       await Promise.all(workers);
     }
+
+    // ---- Exportar agenda (modo DeBelingo, adaptado: semana ayer→domingo) ----
+    const aMedianoche = (d) => { const x = new Date(d); x.setHours(0, 0, 0, 0); return x; };
+    const parseDMY = (day) => {
+      const [d, m, y] = String(day || '').split('-').map(Number);
+      return d && m && y ? new Date(y, m - 1, d) : null;
+    };
+    function semanaAgenda() {
+      const hoy = aMedianoche(new Date());
+      const inicio = new Date(hoy); inicio.setDate(hoy.getDate() - 1); // ayer
+      const fin = new Date(hoy);
+      fin.setDate(hoy.getDate() + (hoy.getDay() === 0 ? 0 : 7 - hoy.getDay())); // domingo
+      fin.setHours(23, 59, 59, 999);
+      return todas.filter((v) => {
+        const f = parseDMY(v.day);
+        return f && f >= inicio && f <= fin;
+      }).sort((a, b) => (aFecha(a.day) - aFecha(b.day)) || String(a.hora).localeCompare(String(b.hora)));
+    }
+    function nodoAgenda(evs) {
+      const dias = {};
+      evs.forEach((v) => { (dias[v.day] = dias[v.day] || []).push(v); });
+      const el = document.createElement('div');
+      el.style.cssText = 'width:1000px;background:#111827;color:#fff;font-family:system-ui,sans-serif;padding:32px';
+      el.innerHTML = `<h1 style="text-align:center;font-size:34px;margin:0 0 4px">🎵 Verbenas Tenerife</h1>
+        <p style="text-align:center;color:#9ca3af;margin:0 0 20px">Agenda de la semana · verbenastenerife</p>` +
+        Object.keys(dias).sort().map((day) => `
+          <h2 style="color:#facc15;text-align:center;text-transform:uppercase;letter-spacing:2px;font-size:22px;margin:22px 0 10px">${esc(nombreDia(day))}</h2>` +
+          dias[day].map((v) => {
+            const t = TIPO[v.tipo] || porDefecto;
+            const orq = (v.orquestas || []).join(' + ');
+            return `<div style="border-left:6px solid ${t.b};background:#1f2937;border-radius:8px;padding:12px 16px;margin:0 0 8px">
+              <div style="font-size:26px;font-weight:800">${esc(v.hora)} <small style="font-size:13px;color:#9ca3af">H</small>
+                <span style="font-size:15px;color:#d1d5db;font-weight:400"> · ${esc(v.lugar ? v.lugar + ', ' : '')}${esc(v.municipio)}</span></div>
+              <div style="font-size:17px;font-weight:700;margin-top:2px">${esc(v.titulo)}</div>
+              ${orq ? `<div style="color:#4ade80;font-size:17px">🎵 ${esc(orq)}</div>` : ''}
+              ${v.tipo && v.tipo !== 'Baile Normal' ? `<span style="display:inline-block;margin-top:4px;background:rgba(6,182,212,.15);color:#67e8f9;border-radius:4px;padding:2px 8px;font-size:14px">${esc(v.tipo)}</span>` : ''}
+            </div>`;
+          }).join('')).join('');
+      return el;
+    }
+    const limiteExport = () => {
+      try {
+        const k = 'vt_export_hist';
+        const ahora = Date.now(), h = 36e5;
+        let ts = JSON.parse(localStorage.getItem(k) || '[]').filter((t) => ahora - t < h);
+        if (ts.length >= 50) return false;
+        ts.push(ahora);
+        localStorage.setItem(k, JSON.stringify(ts));
+        return true;
+      } catch (e) { return true; }
+    };
+    let pngAgenda = null;
+    $('btn-agenda').addEventListener('click', async () => {
+      const evs = semanaAgenda();
+      if (!evs.length) { alert('No hay verbenas esta semana para exportar.'); return; }
+      if (!limiteExport()) { alert('Límite de 50 exportaciones por hora.'); return; }
+      $('btn-agenda').textContent = '⏳ Generando…';
+      try {
+        const nodo = nodoAgenda(evs);
+        nodo.style.position = 'fixed';
+        nodo.style.left = '-1200px';
+        document.body.appendChild(nodo);
+        const { default: html2canvas } = await import('html2canvas');
+        const canvas = await html2canvas(nodo, { backgroundColor: '#111827', scale: 2 });
+        document.body.removeChild(nodo);
+        pngAgenda = canvas.toDataURL('image/png');
+        $('img-agenda').src = pngAgenda;
+        $('modal-agenda').style.display = 'flex';
+      } catch (e) {
+        console.error(e);
+        alert('No se pudo generar la imagen.');
+      }
+      $('btn-agenda').textContent = '📥 Exportar agenda (semana)';
+    });
+    $('btn-cerrar').addEventListener('click', () => { $('modal-agenda').style.display = 'none'; });
+    $('btn-descargar').addEventListener('click', () => {
+      if (!pngAgenda) return;
+      const a = document.createElement('a');
+      a.href = pngAgenda;
+      a.download = 'agenda-verbenas-tenerife.png';
+      a.click();
+    });
+    $('btn-compartir').addEventListener('click', async () => {
+      if (!pngAgenda) return;
+      try {
+        const blob = await (await fetch(pngAgenda)).blob();
+        const file = new File([blob], 'agenda-verbenas.png', { type: 'image/png' });
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+          await navigator.share({ files: [file], title: 'Verbenas Tenerife' });
+          return;
+        }
+        throw new Error('sin share de archivos');
+      } catch (e) {
+        try {
+          await navigator.share({ title: 'Verbenas Tenerife', url: location.href });
+        } catch (e2) { /* cancelado */ }
+      }
+    });
 
     main();
   </script>
