@@ -93,9 +93,6 @@ const fuentes = (filtro
     .pie { background: linear-gradient(to right, #1f2937, #374151); padding: 24px; text-align: center;
       color: #f59e0b; font-weight: 700; font-size: 14px; }
     .pie small { display: block; color: #9ca3af; font-weight: 400; margin-top: 4px; }
-    details.pasadas { max-width: 860px; margin: 0 auto; padding: 16px 24px 32px; }
-    details.pasadas summary { cursor: pointer; color: #9ca3af; font-weight: 700; }
-    details.pasadas .card { opacity: .65; }
     .vacio { text-align: center; color: #9ca3af; padding: 40px 0; }
   </style>
 </head>
@@ -125,11 +122,6 @@ const fuentes = (filtro
 
   <div class="leyenda" id="leyenda"></div>
 
-  <details class="pasadas">
-    <summary>Ya celebradas (<span id="contador-pasadas">0</span>) — historial</summary>
-    <div id="lista-pasadas"></div>
-  </details>
-
   <footer class="pie">
     <div>Última actualización: <span id="pie-hoy">…</span></div>
     <small>VerbenasTenerife · datos en vivo de los ayuntamientos · <span id="pie-total">0</span> verbenas</small>
@@ -155,7 +147,7 @@ const fuentes = (filtro
 
     const $ = (id) => document.getElementById(id);
     const texto = $('progreso-texto'), barra = $('progreso-barra'), chipsBox = $('progreso-chips');
-    const lista = $('lista'), listaPas = $('lista-pasadas'), leyenda = $('leyenda');
+    const lista = $('lista'), leyenda = $('leyenda');
 
     const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) =>
       ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -195,9 +187,8 @@ const fuentes = (filtro
       const f = aFecha(day);
       return `${DIAS[f.getUTCDay()]} ${String(f.getUTCDate()).padStart(2, '0')} DE ${MESES[f.getUTCMonth()]}`;
     };
-    // Orden de más próximo a más antiguo: futuras ascendente, pasadas descendente.
+    // Orden de más próximo a más antiguo (ascendente por fecha y hora).
     const ordFut = (a, b) => (aFecha(a.day) - aFecha(b.day)) || String(a.hora).localeCompare(String(b.hora));
-    const ordPas = (a, b) => (aFecha(b.day) - aFecha(a.day)) || String(b.hora).localeCompare(String(a.hora));
 
     const mapsUrl = (v, mode) => {
       const addr = v.lugar ? `${v.lugar}, ${v.municipio}, Tenerife` : `${v.municipio}, Tenerife`;
@@ -281,8 +272,8 @@ const fuentes = (filtro
 
     function render() {
       const fut = todas.filter((v) => v.futura).sort(ordFut);
-      const pas = todas.filter((v) => !v.futura).sort(ordPas);
-      // Agrupa por día de más próximo a más antiguo
+      // Agrupa por día de más próximo a más antiguo. Las ya celebradas
+      // no se muestran (siguen disponibles en la API con ?filtro=pasadas).
       const grupos = {};
       fut.forEach((v) => { (grupos[v.day || ''] = grupos[v.day || ''] || []).push(v); });
       const dias = Object.keys(grupos).sort((x, y) => (aFecha(x) - aFecha(y)) || x.localeCompare(y));
@@ -291,8 +282,6 @@ const fuentes = (filtro
           <div class="dia-titulo"><h3>${svgCal}<span>${esc(nombreDia(day))}</span>${svgCal}</h3></div>
           ${grupos[day].map(tarjeta).join('')}
         </section>`).join('') || '<p class="vacio">Sin verbenas próximas en los municipios cargados.</p>';
-      $('contador-pasadas').textContent = pas.length;
-      listaPas.innerHTML = pas.map(tarjeta).join('') || '<p class="vacio">Nada por aquí todavía.</p>';
       // Leyenda de tipos activos
       const tipos = [...new Set(todas.map((v) => v.tipo).filter(Boolean))];
       leyenda.innerHTML = tipos.map((tipo) => {
@@ -310,13 +299,6 @@ const fuentes = (filtro
       grupoAbierto = grupoAbierto === id ? null : id;
       document.querySelectorAll(`[data-det="${CSS.escape(id)}"]`).forEach((d) => d.classList.toggle('abierto', grupoAbierto === id));
       document.querySelectorAll(`[data-chev="${CSS.escape(id)}"]`).forEach((b) => b.classList.toggle('abierto', grupoAbierto === id));
-    });
-    listaPas.addEventListener('click', (e) => {
-      const btn = e.target.closest('[data-chev]');
-      if (!btn) return;
-      const id = btn.dataset.chev;
-      document.querySelectorAll(`#lista-pasadas [data-det="${CSS.escape(id)}"]`).forEach((d) => d.classList.toggle('abierto'));
-      btn.classList.toggle('abierto');
     });
 
     function avanza() {
