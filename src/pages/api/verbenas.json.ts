@@ -22,8 +22,11 @@ export const GET: APIRoute = async ({ url }) => {
       filtroMunicipio: municipio || null,
       filtroFecha: filtro,
       verbenas
+      // Sin caché de navegador (no-store): la caché de 1h ya vive en el
+      // servidor por adaptador; si el navegador cacheara, un 0 temporal
+      // se quedaría pegado una hora.
     }, null, 2), {
-      headers: { 'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=3600' }
+      headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }
     });
   } catch (e: any) {
     return new Response(JSON.stringify({ ok: false, error: String(e?.message || e) }), { status: 500 });
