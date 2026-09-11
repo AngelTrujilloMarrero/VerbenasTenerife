@@ -42,7 +42,31 @@ function lugarSC(seccion: string, titulo: string): string {
   return ultimo || MUNI;
 }
 
-/** Descubre posts recientes de fiestas + páginas fijas de programas. */
+/** Mes insinuado en el slug (mayo, navidad->12, carnaval->2...). -1 si no se sabe. */
+function mesEnSlug(slug: string): number {
+  const MESES_SLUG: [RegExp, number][] = [
+    [/navidad/i, 12], [/carnaval/i, 2], [/habaneras/i, 7], [/carmen/i, 7],
+    [/enero/i, 1], [/febrero/i, 2], [/marzo/i, 3], [/abril/i, 4], [/mayo/i, 5],
+    [/junio/i, 6], [/julio/i, 7], [/agosto/i, 8], [/septiembre/i, 9],
+    [/octubre/i, 10], [/noviembre/i, 11], [/diciembre/i, 12]
+  ];
+  for (const [re, m] of MESES_SLUG) if (re.test(slug)) return m;
+  return -1;
+}
+
+/** ¿El programa aún puede tener futuras? Año futuro, o mismo año con mes >= actual. */
+function programaVigente(url: string): boolean {
+  const y = url.match(/(20\d{2})/);
+  const ahora = new Date();
+  const slug = url.split('/').filter(Boolean).pop() || '';
+  if (y && Number(y[1]) < ahora.getFullYear()) return false;
+  if (y && Number(y[1]) > ahora.getFullYear()) return true;
+  const mes = mesEnSlug(slug);
+  if (mes !== -1) return mes >= ahora.getMonth() + 1;
+  return true; // sin pistas: se intenta
+}
+
+/** Descubre posts recientes de fiestas + programas vigentes del menú. */
 async function descubrir(): Promise<{ titulo: string; url: string }[]> {
   const out: { titulo: string; url: string }[] = [];
   const seen = new Set<string>();
@@ -64,10 +88,20 @@ async function descubrir(): Promise<{ titulo: string; url: string }[]> {
     mete(titulo, href.startsWith('http') ? href : BASE + href);
   });
 
-  // Programas fijos del menú "Ver Programas" (largo recorrido: Mayo, Navidad...)
-  for (const slug of ['programa-fiestas-de-mayo-2026', 'programa-navidad-2025', 'programa-dia-de-canarias-2026']) {
-    mete(slug.replace(/-/g, ' '), `${BASE}/${slug}/`);
-  }
+  // Programas del menú "Ver Programas" (portada): solo vigentes, no pasado.
+  // (El gigante Fiestas de Mayo 2026 en septiembre solo daría pasadas.)
+  try {
+    const home = await fetchText(BASE + '/');
+    const $$ = cheerio.load(home);
+    $$('a[href*="/programa-"], a[href*="/fiestas-de"], a[href*="/fiestas-del"], a[href*="/carnaval"]').each((_, a) => {
+      const href = $$(a).attr('href') || '';
+      if (!href.startsWith(BASE + '/') && !href.startsWith('/')) return;
+      const url = href.startsWith('http') ? href : BASE + href;
+      if (!programaVigente(url)) return;
+      mete($$(a).text().trim() || url.split('/').filter(Boolean).pop() || url, url);
+    });
+  } catch { /* sin menú: solo blog */ }
+
   return out.slice(0, MAX_DETALLES);
 }
 

@@ -32,7 +32,10 @@ Estado: 48 eventos en 10 municipios (Santa Cruz 13 del blog + programas
 fijos; 28 futuras). Santa Cruz: días flexibles, bailes sin hora con hora
 previa, penalty religioso solo sin mención explícita, dedup general con fusión.
 - Exportar agenda: botón 📥 genera PNG de la semana (ayer→domingo) con
-  html2canvas + modal Compartir/Descargar (adaptado de DeBelingo, sin Firebase).
+  html2canvas vía importmap CDN (`esm.sh`, sin bundlear) + modal
+  Compartir/Descargar (adaptado de DeBelingo, sin Firebase).
+- Deploy Vercel: adaptador `@astrojs/vercel` con `maxDuration: 60` (en local
+  sigue Node). Tras cada push hay que REDEPLOYAR en Vercel.
 Siguiente paso: 7º ayuntamiento o guardar en Firebase con el modelo `Event`.
 - lagenda.org (`src/lib/lagenda.ts`): índice planfinde + programas con días y
   horas ("23:00 - Gran Baile..."). Respeto a robots (pausa entre detalles),
