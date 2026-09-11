@@ -64,9 +64,10 @@ function esDuplicada(a: Verbena, b: Verbena): boolean {
 function fusionar(a: Verbena, b: Verbena): Verbena {
   const conHora = a.hora ? a : b.hora ? b : a;
   const otra = conHora === a ? b : a;
+  const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
   const orq = [...conHora.orquestas];
   for (const o of otra.orquestas) {
-    if (!orq.some((x) => x.toLowerCase() === o.toLowerCase())) orq.push(o);
+    if (!orq.some((x) => norm(x) === norm(o))) orq.push(o);
   }
   return { ...conHora, orquestas: orq, score: Math.max(a.score, b.score),
     motivos: [...new Set([...a.motivos, ...b.motivos])] };

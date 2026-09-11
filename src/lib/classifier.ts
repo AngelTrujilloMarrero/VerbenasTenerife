@@ -203,7 +203,10 @@ export function extraerOrquestas(titulo: string): string[] {
       for (let i = 0; i < 3; i++) {
         const pre = n.match(/^(la|las|los|el|orquesta|orquestas|grupo|grupos)\b\s*/i);
         if (!pre) break;
-        n = n.slice(pre[0].length).trim();
+        const rest = n.slice(pre[0].length).trim();
+        // No dejar "Grupo La Calle" en "Calle" a secas (luego parece callejero)
+        if (!rest.includes(' ') && /^(calle|plaza|parque|avenida|teatro)$/i.test(rest)) break;
+        n = rest;
       }
       return n;
     };
@@ -218,8 +221,10 @@ export function extraerOrquestas(titulo: string): string[] {
       const n = limpia(raw);
       if (n.length < 3 || ES_ADMIN.test(n)) return;
       if (!musicCtx && ES_LUGAR.test(n)) return;
+      // Comparación sin acentos: "Pati" y "Patí" son el mismo grupo
+      const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
       const dup = orq.some((o) => {
-        const a = o.toLowerCase(), b = n.toLowerCase();
+        const a = norm(o), b = norm(n);
         return a === b || a.includes(b) || b.includes(a);
       });
       if (!dup) orq.push(n);
@@ -369,9 +374,11 @@ export function partirPorDias(programa: string): SeccionDia[] {
   while ((m = DIA_EL_MES.exec(programa)) !== null) {
     // Evita duplicar un encabezado ya capturado en la misma posición
     if (headers.some((h) => Math.abs(h.index - m.index) < 12)) continue;
-    // Evita partir por plazos ("...inscripción (hasta el 10 de septiembre)")
+    // Evita partir por plazos ("...inscripción (hasta el 10 de septiembre)",
+    // "(desde el 9 de septiembre hasta el 17...)"). Se comprueba con y sin
+    // el "el" inicial del match, que forma parte de DIA_EL_MES.
     const previo = programa.slice(Math.max(0, m.index - 28), m.index);
-    if (NO_ES_DIA.test(previo)) continue;
+    if (NO_ES_DIA.test(previo) || NO_ES_DIA.test(previo + 'el')) continue;
     headers.push({ dia: parseInt(m[1], 10), mes: m[2], anyo: m[3] || '', index: m.index });
   }
   headers.sort((a, b) => a.index - b.index);
