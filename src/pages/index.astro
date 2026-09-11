@@ -1,0 +1,161 @@
+---
+export const prerender = false;
+import { FUENTES } from '../lib/verbenas.js';
+
+// Shell instantánea: NO se espera a ningún scraper aquí. Solo se incrusta la
+// lista de fuentes (código, no datos) y el navegador pide cada municipio
+// por separado a /api/verbenas.json, actualizando la barra de progreso.
+// ?municipio=arona|adeje limita las fuentes desde el primer momento.
+const filtro = Astro.url.searchParams.get('municipio') || undefined;
+const fuentes = (filtro
+  ? FUENTES.filter((f) => f.id === filtro.toLowerCase())
+  : FUENTES
+).map((f) => ({ id: f.id, nombre: f.nombre }));
+---
+
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Verbenas Tenerife — piloto</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 860px; margin: 2rem auto; padding: 0 1rem; }
+    .card { border: 1px solid #ddd; border-radius: 12px; padding: 1rem; margin: 1rem 0; }
+    .card.pasada { opacity: .65; }
+    .meta { color: #555; font-size: .9rem; }
+    .badge { display: inline-block; background: #111; color: #fff; border-radius: 999px; padding: .15rem .6rem; font-size: .8rem; }
+    .muni { display: inline-block; background: #0a58ca; color: #fff; border-radius: 999px; padding: .15rem .6rem; font-size: .8rem; }
+    nav a { margin-right: .75rem; }
+    details.pasadas { margin-top: 2rem; border-top: 2px solid #eee; padding-top: 1rem; }
+    .progreso { background: #f1f3f5; border-radius: 12px; padding: 1rem; margin: 1rem 0; }
+    .barra-ext { background: #dee2e6; border-radius: 999px; height: 12px; overflow: hidden; margin: .5rem 0; }
+    .barra-int { background: #0a58ca; height: 100%; width: 0%; transition: width .3s; }
+    .chips { display: flex; flex-wrap: wrap; gap: .4rem; margin-top: .5rem; }
+    .chip { border-radius: 999px; padding: .15rem .6rem; font-size: .8rem; background: #e9ecef; }
+    .chip.ok { background: #d3f9d8; }
+    .chip.error { background: #ffc9c9; }
+  </style>
+</head>
+<body>
+  <h1>Verbenas Tenerife <span class="badge">piloto</span></h1>
+  <nav>
+    <a href="/">Todas</a>
+    {FUENTES.map(f => <a href={`/?municipio=${f.id}`}>{f.nombre}</a>)}
+  </nav>
+
+  <section class="progreso" aria-live="polite">
+    <div id="progreso-texto">Preparando…</div>
+    <div class="barra-ext"><div class="barra-int" id="progreso-barra"></div></div>
+    <div class="chips" id="progreso-chips"></div>
+  </section>
+
+  <h2>Próximas verbenas (<span id="contador-futuras">0</span>)</h2>
+  <div id="lista-futuras"><p class="meta">Cargando municipios…</p></div>
+
+  <details class="pasadas">
+    <summary><strong>Ya celebradas (<span id="contador-pasadas">0</span>)</strong> — listado inferior, solo historial</summary>
+    <div id="lista-pasadas"></div>
+  </details>
+
+  <noscript><p>Necesitas JavaScript para cargar las agendas en vivo.</p></noscript>
+
+  <script define:vars={{ fuentes }}>
+    const texto = document.getElementById('progreso-texto');
+    const barra = document.getElementById('progreso-barra');
+    const chipsBox = document.getElementById('progreso-chips');
+    const listaFuturas = document.getElementById('lista-futuras');
+    const listaPasadas = document.getElementById('lista-pasadas');
+    const contFut = document.getElementById('contador-futuras');
+    const contPas = document.getElementById('contador-pasadas');
+
+    const total = fuentes.length;
+    const todas = [];
+    let hechas = 0;
+    const chips = {};
+
+    const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) =>
+      ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+    // Pinta un chip por municipio: ⏳ → ✓/✗, para saber qué ha llegado.
+    fuentes.forEach((f) => {
+      const el = document.createElement('span');
+      el.className = 'chip';
+      el.textContent = `⏳ ${f.nombre}`;
+      chipsBox.appendChild(el);
+      chips[f.id] = el;
+    });
+
+    const claveFecha = (v) => {
+      const [d, m, y] = String(v.day || '').split('-');
+      return `${y || '9999'}-${m || '99'}-${d || '99'} ${v.hora || '99:99'}`;
+    };
+
+    const tarjeta = (v, pasada) => `
+      <article class="card${pasada ? ' pasada' : ''}">
+        <h3>${esc(v.titulo)}</h3>
+        <p class="meta"><span class="muni">${esc(v.municipio)}</span>
+          ${esc(v.day || 'fecha por confirmar')} · ${esc(v.hora)} h ·
+          ${esc(v.lugar)} · ${esc(v.tipo)}${pasada ? '' : ` · score ${v.score ?? ''}`}</p>
+        ${(v.orquestas || []).length ? `<p><strong>Orquestas:</strong> ${esc(v.orquestas.join(' + '))}</p>` : ''}
+        <p><a href="${esc(v.url)}">Fuente original</a></p>
+        ${(!pasada && v.motivos) ? `<details><summary>Por qué se clasificó así</summary><p class="meta">${esc(v.motivos.join(' · '))}</p></details>` : ''}
+      </article>`;
+
+    function render() {
+      const fut = todas.filter((v) => v.futura).sort((a, b) => claveFecha(a) < claveFecha(b) ? -1 : 1);
+      const pas = todas.filter((v) => !v.futura).sort((a, b) => claveFecha(a) < claveFecha(b) ? -1 : 1);
+      contFut.textContent = fut.length;
+      contPas.textContent = pas.length;
+      listaFuturas.innerHTML = fut.length ? fut.map((v) => tarjeta(v, false)).join('') : '<p class="meta">Sin verbenas próximas en los municipios cargados.</p>';
+      listaPasadas.innerHTML = pas.length ? pas.map((v) => tarjeta(v, true)).join('') : '<p class="meta">Nada por aquí todavía.</p>';
+    }
+
+    function avanza() {
+      hechas++;
+      barra.style.width = `${Math.round((hechas / total) * 100)}%`;
+      if (hechas >= total) {
+        const n = todas.filter((v) => v.futura).length;
+        texto.textContent = `Listo: ${hechas}/${total} municipios · ${n} próximas.`;
+      }
+    }
+
+    async function cargaFuente(f) {
+      texto.textContent = `Cargando ${f.nombre}… (${hechas + 1}/${total})`;
+      try {
+        const r = await fetch(`/api/verbenas.json?municipio=${f.id}&filtro=todas`);
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        const d = await r.json();
+        const n = (d.verbenas || []).length;
+        todas.push(...(d.verbenas || []));
+        chips[f.id].className = 'chip ok';
+        chips[f.id].textContent = `✓ ${f.nombre} (${n})`;
+      } catch (e) {
+        chips[f.id].className = 'chip error';
+        chips[f.id].textContent = `✗ ${f.nombre} (falló)`;
+      }
+      avanza();
+      render();
+    }
+
+    // Lotes de 4 en paralelo: progresivo sin acribillar al servidor
+    // (importante cuando sean 31 municipios).
+    async function main() {
+      if (!total) {
+        texto.textContent = 'Municipio desconocido.';
+        listaFuturas.innerHTML = '';
+        return;
+      }
+      texto.textContent = `Cargando 0/${total} municipios…`;
+      render();
+      const pendientes = [...fuentes];
+      const workers = Array.from(
+        { length: Math.min(4, pendientes.length) },
+        async () => { while (pendientes.length) await cargaFuente(pendientes.shift()); }
+      );
+      await Promise.all(workers);
+    }
+
+    main();
+  </script>
+</body>
+</html>

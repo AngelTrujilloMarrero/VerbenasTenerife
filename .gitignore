@@ -1,0 +1,17 @@
+# Deps
+node_modules/
+.pnpm-store/
+
+# Build
+dist/
+.astro/
+
+# Env (claves Firebase / Gemini futuras)
+.env
+.env.*
+!.env.example
+
+# OS / editor
+.DS_Store
+.vscode/
+*.log
