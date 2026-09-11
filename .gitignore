@@ -6,6 +6,10 @@ node_modules/
 dist/
 .astro/
 
+# Caché de OCR (imágenes descargadas + binario Vision); el texto va versionado
+# en src/lib/data/ocr-programas.json
+.cache/
+
 # Env (claves Firebase / Gemini futuras)
 .env
 .env.*

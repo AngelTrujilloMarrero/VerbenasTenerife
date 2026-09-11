@@ -1,21 +1,26 @@
 // Helper HTTP compartido (una sola UA para los 31 aytos).
 // Con timeout: una fuente colgada falla rápido (chip ✗) en vez de colgar la petición.
 import * as cheerio from 'cheerio';
+import { dispatcherPara } from './tls-ca.js';
 
 export async function fetchText(url: string, timeoutMs = 25000): Promise<string> {
+  const dispatcher = dispatcherPara(url);
   const r = await fetch(url, {
     headers: { 'User-Agent': 'VerbenasTenerife/0.1 (piloto; contacto admin)' },
-    signal: AbortSignal.timeout(timeoutMs)
-  });
+    signal: AbortSignal.timeout(timeoutMs),
+    ...(dispatcher ? { dispatcher } : {})
+  } as RequestInit);
   if (!r.ok) throw new Error(`HTTP ${r.status} en ${url}`);
   return r.text();
 }
 
 export async function fetchBytes(url: string, timeoutMs = 60000): Promise<Uint8Array> {
+  const dispatcher = dispatcherPara(url);
   const r = await fetch(url, {
     headers: { 'User-Agent': 'VerbenasTenerife/0.1 (piloto; contacto admin)' },
-    signal: AbortSignal.timeout(timeoutMs)
-  });
+    signal: AbortSignal.timeout(timeoutMs),
+    ...(dispatcher ? { dispatcher } : {})
+  } as RequestInit);
   if (!r.ok) throw new Error(`HTTP ${r.status} en ${url}`);
   return new Uint8Array(await r.arrayBuffer());
 }

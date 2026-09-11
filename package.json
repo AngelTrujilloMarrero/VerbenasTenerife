@@ -6,12 +6,14 @@
   "scripts": {
     "dev": "astro dev",
     "build": "astro build",
-    "preview": "astro preview"
+    "preview": "astro preview",
+    "ocr:programa": "node scripts/ocr-programas.mjs"
   },
   "dependencies": {
     "astro": "^7.3.2",
     "cheerio": "^1.0.0",
-    "pdfjs-dist": "^6.3.289"
+    "pdfjs-dist": "^6.3.289",
+    "undici": "^7.29.1"
   },
   "devDependencies": {
     "@astrojs/node": "^11.1.5",

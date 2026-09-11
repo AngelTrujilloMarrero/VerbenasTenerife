@@ -6,7 +6,10 @@ export const COORDS: Record<string, { lat: number; lon: number }> = {
   tegueste: { lat: 28.5219, lon: -16.3387 },
   lalaguna: { lat: 28.4856, lon: -16.3134 },
   guiadeisora: { lat: 28.2097, lon: -16.7792 },
-  elrosario: { lat: 28.526, lon: -16.368 }
+  elrosario: { lat: 28.526, lon: -16.368 },
+  arico: { lat: 28.1833, lon: -16.4667 },
+  fasnia: { lat: 28.2398, lon: -16.4243 },
+  tacoronte: { lat: 28.4787, lon: -16.4119 }
 };
 
 export function coordsDe(municipio: string): { lat: number; lon: number } | null {

@@ -110,7 +110,7 @@ export async function obtenerVerbenasElRosario(): Promise<Verbena[]> {
           if (!cls.esVerbena) continue;
           sacadas++;
           push({
-            id: `elrosario-${slug.slice(0, 25)}-${sub.hora.replace(':', '') || 'sh'}-${day}`.toLowerCase().replace(/[^a-z0-9-]+/g, '-'),
+            id: `elrosario-${slug.slice(0, 20)}-${sub.hora.replace(':', '') || 'sh'}-${day}-${sub.titulo.split(/\s+/).slice(0, 3).join(' ')}`.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9-]+/g, '-'),
             titulo: sub.titulo, day, hora: sub.hora, municipio: MUNI,
             lugar: sub.lugar || lugar, orquestas: sub.orquestas,
             tipo: tipoDeEvento(sub.titulo), url: it.url,

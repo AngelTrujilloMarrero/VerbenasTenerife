@@ -1,11 +1,14 @@
 import { ADEJE_URL, obtenerVerbenasAdeje } from './adeje.js';
+import { ARICO_URL, obtenerVerbenasArico } from './arico.js';
 import { ARONA_URL, obtenerVerbenasArona } from './arona.js';
 import { ELROSARIO_URL, obtenerVerbenasElRosario } from './elrosario.js';
+import { FASNIA_URL, obtenerVerbenasFasnia } from './fasnia.js';
 import { GRANADILLA_URL, obtenerVerbenasGranadilla } from './granadilla.js';
 import { GUIADEISORA_URL, obtenerVerbenasGuiaDeIsora } from './guiadeisora.js';
 import { LAGENDA_URL, obtenerVerbenasLagenda } from './lagenda.js';
 import { LALAGUNA_URL, obtenerVerbenasLaLaguna } from './lalaguna.js';
 import { SANTACRUZ_URL, obtenerVerbenasSantaCruz } from './santacruz.js';
+import { TACORONTE_URL, obtenerVerbenasTacoronte } from './tacoronte.js';
 import { TEGUESTE_URL, obtenerVerbenasTegueste } from './tegueste.js';
 import { normTxt } from './municipios.js';
 import { porFecha, type Fuente, type Verbena } from './types.js';
@@ -22,6 +25,9 @@ export const FUENTES: Fuente[] = [
   { id: 'guiadeisora', nombre: 'Guía de Isora', agendaUrl: GUIADEISORA_URL, obtener: obtenerVerbenasGuiaDeIsora },
   { id: 'granadilla', nombre: 'Granadilla de Abona', agendaUrl: GRANADILLA_URL, obtener: obtenerVerbenasGranadilla },
   { id: 'santacruz', nombre: 'Santa Cruz de Tenerife', agendaUrl: SANTACRUZ_URL, obtener: obtenerVerbenasSantaCruz },
+  { id: 'arico', nombre: 'Arico', agendaUrl: ARICO_URL, obtener: obtenerVerbenasArico },
+  { id: 'fasnia', nombre: 'Fasnia', agendaUrl: FASNIA_URL, obtener: obtenerVerbenasFasnia },
+  { id: 'tacoronte', nombre: 'Tacoronte', agendaUrl: TACORONTE_URL, obtener: obtenerVerbenasTacoronte },
   { id: 'lagenda', nombre: 'Lagenda', agendaUrl: LAGENDA_URL, obtener: obtenerVerbenasLagenda }
 ];
 

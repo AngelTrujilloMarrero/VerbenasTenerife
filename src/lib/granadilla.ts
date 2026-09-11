@@ -140,7 +140,7 @@ export async function obtenerVerbenasGranadilla(): Promise<Verbena[]> {
           const cls = clasificarDetalle(l.titulo, ventana(sec.texto, l.titulo, 400), l.hora, lugar);
           if (!cls.esVerbena) continue;
           push({
-            id: `granadilla-${slug.slice(0, 25)}-${l.hora.replace(':', '') || 's-hora'}-${day}`.toLowerCase().replace(/[^a-z0-9-]+/g, '-'),
+            id: `granadilla-${slug.slice(0, 20)}-${l.hora.replace(':', '') || 's-hora'}-${day}-${l.titulo.split(/\s+/).slice(0, 3).join(' ')}`.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9-]+/g, '-'),
             titulo: l.titulo, day, hora: l.hora, municipio: MUNI, lugar,
             orquestas: l.orquestas, tipo: tipoDeEvento(l.titulo), url: n.url,
             score: cls.score, motivos: [...cls.motivos, `noticia: ${n.titulo.slice(0, 50)}`]

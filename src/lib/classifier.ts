@@ -10,7 +10,7 @@ export interface ScoredEvent {
   esVerbena: boolean;
 }
 
-const TITULO_POS = /\b(baile|gran baile|verbena|verbenazo|megaverbena|tardeo|noche latina|noche boricua|baile de magos|romer[ií]a|orquesta|tributo|studio 54)\b/i;
+const TITULO_POS = /\b(baile|gran baile|verbena|verbenazo|megaverbena|tardeo|concierto bailable|noche latina|noche boricua|baile de magos|romer[ií]a|orquesta|tributo|studio 54)\b/i;
 const DESC_POS = /amenizado por|amenizan|orquestas?\s*:|orquestas?\s+[A-ZÁÉÍÓÚÑ]|gran baile|noche latina/i;
 const HORA_NOCTURNA = /(19|2[0-3]|21):\d{2}/;
 
@@ -180,18 +180,33 @@ export function extraerSubEventos(programaTexto: string): SubEvento[] {
   // Resetea lastIndex por si se reutiliza la regex global
   LINEA_BAILE.lastIndex = 0;
   while ((m = LINEA_BAILE.exec(programaTexto)) !== null) {
-    const [, hora, tituloRaw, lugarRaw] = m;
+    const [, horaRaw, tituloRaw, lugarRaw] = m;
+    let hora = horaRaw;
     // El título puede arrastrar preámbulo ("con una verbena...", "se celebrará
     // una verbena..."): recortar hasta el primer keyword.
     let titulo = tituloRaw.trim().replace(/^[,\s:;·•\-–—]+/, '');
-    const ki = titulo.search(/gran baile|verbena|verbenazo|baile de magos|baile de taifa|tardeo|noche latina|noche boricua/i);
+    // Mismo conjunto que LINEA_BAILE (incluido "baile" a secas), si no el
+    // recorte no encontraba el keyword ("...se celebrará el baile de la Pamela").
+    const ki = titulo.search(/gran baile|baile|verbena|verbenazo|tardeo|noche latina|noche boricua/i);
     if (ki > 0) {
+      const prev = titulo.slice(0, ki);
+      // El preámbulo suele traer la hora propia del acto ("...a las 15:00 horas
+      // se celebrará el baile..."); prevalece sobre la hora de arranque (13:00).
+      const horaPropia = [...prev.matchAll(/(\d{1,2}:\d{2})/g)].pop()?.[1];
+      if (horaPropia) hora = horaPropia;
       // Conservar "Fiesta Joven y Verbena" entero (si no, duplicaría con el
       // path timeless que sí guarda el prefijo).
-      const prev = titulo.slice(0, ki);
       const mF = prev.match(/fiesta(?:\s+\w+){0,2}\s+y\s*$/i);
       titulo = ((mF ? prev.slice(mF.index) : '') + titulo.slice(ki)).trim();
     }
+    // "gala ... Escuela de Baile Kanachined": mención de escuela, no verbena.
+    if (/(?:escuela|clase|clases|taller|exhibici[oó]n|concurso|academia|gimnasio)\s+de\s+baile/i.test(tituloRaw)) continue;
+    // Feria infantil ("hinchables, juegos, música, baile y encuentro mágico").
+    if (/hinchables|juegos infantiles|atracciones infantiles|parque infantil/i.test(tituloRaw) &&
+        !/orquesta|verbena/i.test(tituloRaw)) continue;
+    // Lista de actividades ("...combinará música, gastronomía, baile, ocio..."):
+    // un título que empieza por "baile," no es un acto.
+    if (/^baile\s*[,:]/i.test(titulo)) continue;
     out.push({ day: '', hora, titulo, orquestas: extraerOrquestas(titulo), lugar: (lugarRaw || '').trim() });
   }
   return out;
@@ -211,7 +226,8 @@ export function extraerOrquestas(titulo: string): string[] {
       // Estos SÍ admiten comas (luego se parte por coma/y).
       // El genérico exige mayúscula inicial SIN /i para no tragar frases.
       { re: /verbena\s+(?:con|a\s+cargo\s+de)\s+(?:la\s+actuaci[oó]n(?:es)?\s+de\s+|las\s+actuaciones\s+de\s+)?([^.;]{3,160})/i, coma: true },
-      { re: /\bcon\s+(?:las?\s+|los\s+)?(?:la\s+actuaci[oó]n(?:es)?\s+de\s+|las\s+actuaciones\s+de\s+)?(?:orquestas?\s*:?\s*)?([A-ZÁÉÍÓÚÑ][^.;]{3,160})/, coma: true }
+      { re: /(?:ameniza|anima)(?:do|da|dos|das)\s+por\s+([^.;]{3,160})/i, coma: true },
+      { re: /\bcon\s+(?:las?\s+|los\s+|el\s+|la\s+)?(?:la\s+actuaci[oó]n(?:es)?\s+de\s+|las\s+actuaciones\s+de\s+)?(?:orquestas?\s*:?\s*)?([A-ZÁÉÍÓÚÑ][^.;]{3,160})/, coma: true }
     ];
     const limpia = (s: string): string => {
       // Fuera paréntesis ("(taller de salsa...)", "(tributo a ...)") y comillas
@@ -240,6 +256,9 @@ export function extraerOrquestas(titulo: string): string[] {
       const musicCtx = /orquesta|grupo|parranda|tributo|banda|d[uú]o|\bdj\b/i.test(raw);
       const n = limpia(raw);
       if (n.length < 3 || ES_ADMIN.test(n)) return;
+      // Fragmentos horarios colados al partir ("... Dorada Band, a las 22:00h")
+      if (/^(?:a\s+las?\s+|de\s+|desde\s+las?\s+|a\s+partir\s+de\s+las?\s+)?\d{1,2}(?::\d{2})?\s*h(?:oras)?\.?$/i.test(n)) return;
+      if (/^(?:a\s+las?\s+|de\s+|desde\s+las?\s+)\d/i.test(n)) return;
       if (!musicCtx && ES_LUGAR.test(n)) return;
       // Comparación sin acentos: "Pati" y "Patí" son el mismo grupo
       const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
@@ -268,7 +287,7 @@ export function extraerOrquestas(titulo: string): string[] {
 // en pasado ("la verbena fue un éxito").
 const TIENE_MUSICA = /orquesta|grupo|banda|dj|parranda|\bson\b|tributo|latin|band\b/i;
 const EN_PASADO = /\b(fue|fueron|tuvo|hubo|han sido|se celebró|fueron un éxito)\b/i;
-const LINEA_SIN_HORA = /(?:((?:fiesta|gran fiesta|fiesta joven)\s+y\s+))?(gran baile|verbena|baile de magos|baile de taifa)\b([^.\n]{0,180}?)(?=[.]|$)/gi;
+const LINEA_SIN_HORA = /(?:((?:fiesta|gran fiesta|fiesta joven)\s+y\s+))?(gran baile|baile popular|verbena|baile de magos|baile de taifa|concierto bailable)\b([^.\n]{0,180}?)(?=[.]|$)/gi;
 const DIAS_CORTE = /\s+(?:el\s+)?(?:lunes|martes|miércoles|miercoles|jueves|viernes|sábado|sabado|domingo)\b/i;
 
 export interface BaileSinHora {
@@ -295,8 +314,11 @@ export function horaPrevia(texto: string, titulo: string, radio = 250): string {
   return post.match(/(\d{1,2}:\d{2})/)?.[1] || '';
 }
 
-export function extraerBailesSinHora(texto: string): BaileSinHora[] {
+export function extraerBailesSinHora(textoOriginal: string): BaileSinHora[] {
   const out: BaileSinHora[] = [];
+  // El punto de una abreviatura ("St. Pedro") cortaba el título en seco;
+  // se elimina solo el punto (la abreviatura se conserva).
+  const texto = textoOriginal.replace(/\b(St|Sta|Sr|Sra|Srt|Dr|Dra|D|Ntra|Ntro|Gral|Cnel|Avda)\.(?=\s)/gi, '$1');
   let m: RegExpExecArray | null;
   LINEA_SIN_HORA.lastIndex = 0;
   while ((m = LINEA_SIN_HORA.exec(texto)) !== null) {
@@ -323,6 +345,19 @@ export const MESES: Record<string, string> = {
 export function mesANum(mes: string): string {
   const k = mes.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
   return MESES[k] || MESES[mes.toLowerCase()] || '';
+}
+
+/** "21.30h" -> "21:30", "09.00 horas" -> "09:00". Solo con h/horas detrás
+ *  para no tocar versiones ni decimales ("v2.0", "3.50 €" quedan igual). */
+export function normalizarHoras(texto: string): string {
+  return texto.replace(/(\b\d{1,2})\.(\d{2})(?=\s*h\b|\s*horas\b)/gi, '$1:$2');
+}
+
+/** Mes+año del contexto del documento ("TACORONTE · SEPTIEMBRE 2026"). */
+export function mesContexto(texto: string): { mes: string; anyo: string } {
+  const m = texto.match(/\b(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|setiembre|octubre|noviembre|diciembre)\b\s*(20\d{2})/i);
+  if (!m) return { mes: '', anyo: '' };
+  return { mes: mesANum(m[1]), anyo: m[2] };
 }
 
 /** Posición aproximada del título en el texto: prueba prefijos cada vez más
@@ -373,6 +408,16 @@ export function lugarCercano(seccion: string, titulo: string, radio = 400): stri
   };
   considera(RE_LUGAR);
   considera(RE_LUGAR_CASCO);
+  if (ultimo) {
+    // Colapsa cabeceras repetidas del PDF ("Plaza del Cristo de Tacoronte
+    // Plaza del Cristo de" -> "Plaza del Cristo de Tacoronte").
+    const head = ultimo.match(/^\w+/)?.[0] || '';
+    if (head) {
+      const rep = ultimo.search(new RegExp(`\\b${head}\\b`, 'i'));
+      const second = rep >= 0 ? ultimo.slice(rep + head.length).search(new RegExp(`\\b${head}\\b`, 'i')) : -1;
+      if (second >= 0) ultimo = ultimo.slice(0, rep + head.length + second).trim();
+    }
+  }
   return ultimo;
 }
 
@@ -386,20 +431,51 @@ export interface SeccionDia {
   texto: string;
 }
 
-const HEADER_DIA = /(viernes|s[aá]bado|domingo|lunes|martes|mi[eé]rcoles|jueves)\s*,?\s*(\d{1,2})(?:\s+de\s+([a-záéíóúñ]+))?(?:\s+de\s+(20\d{2}))?/gi;
+const HEADER_DIA = /(viernes|s[aá]bado|domingo|lunes|martes|mi[eé]rcoles|jueves)\s*,?\s*(\d{1,2})\b(?!\s*[:.]\d)(?:\s+de\s+([a-záéíóúñ]+))?(?:\s+de\s+(20\d{2}))?/gi;
+// Día primero ("18 Viernes", "26 Sábado", "Lunes 09."): algunos programas
+// (Tacoronte) ordenan al revés y sin mes (lo pone el contexto del doc).
+const HEADER_DIA_INV = /(?<!\d)(\d{1,2})\b(?!\s*[:.]\d)\s+(viernes|s[aá]bado|domingo|lunes|martes|mi[eé]rcoles|jueves)\b/gi;
+// Fecha a inicio de línea ("7 de agosto: ...", "14-15 de agosto: ...").
+// Con ^ anclado: evita tragar rangos y horas en mitad de frase.
+const HEADER_DIA_LINEA = /^(\d{1,2})(?:\s*[–-]\s*(\d{1,2}))?\s+de\s+([a-záéíóúñ]+)/gim;
 // "...hasta el 24 de septiembre" (sin día de semana, con mes obligatorio;
 // \bel\b no traga "del" ni "al ... de").
 // NO parte si es un plazo ("hasta el 10 de septiembre", "inscripción antes del...").
 const DIA_EL_MES = /\bel\s+(\d{1,2})\s+de\s+([a-záéíóúñ]+)(?:\s+de\s+(20\d{2}))?/gi;
 const NO_ES_DIA = /(hasta|antes\s+del?|desde\s+el|plazo|inscripci[oó]n|cierra?|cierre)\s*$/i;
 
-export function partirPorDias(programa: string): SeccionDia[] {
+const WD_ES = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+const normWd = (s: string) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
+/** ¿Cae `dia` en `weekday` dentro de (mes, anyo)? Para descartar artefactos
+ *  de paginación ("24 25 Jueves", "13 14 Domingo") en cabeceras día-primero. */
+export function diaValido(dia: number, mes: string, anyo: string, weekday: string): boolean {
+  const m = parseInt(mes, 10), y = parseInt(anyo, 10);
+  if (!m || !y || dia < 1 || dia > 31) return false;
+  return normWd(WD_ES[new Date(Date.UTC(y, m - 1, dia)).getUTCDay()]) === normWd(weekday);
+}
+
+export function partirPorDias(programa: string, ref?: { mes: string; anyo: string }): SeccionDia[] {
   const out: SeccionDia[] = [];
   const headers: { dia: number; mes: string; anyo: string; index: number }[] = [];
   let m: RegExpExecArray | null;
   HEADER_DIA.lastIndex = 0;
   while ((m = HEADER_DIA.exec(programa)) !== null) {
     headers.push({ dia: parseInt(m[2], 10), mes: m[3] || '', anyo: m[4] || '', index: m.index });
+  }
+  HEADER_DIA_INV.lastIndex = 0;
+  while ((m = HEADER_DIA_INV.exec(programa)) !== null) {
+    if (headers.some((h) => Math.abs(h.index - m.index) < 12)) continue;
+    // Con contexto de mes/año se valida día-semana y caen restos de
+    // paginación ("24 25 Jueves", "13 14 Domingo"); sin contexto se acepta.
+    const mm = ref?.mes || '', yy = ref?.anyo || '';
+    if (mm && yy && !diaValido(parseInt(m[1], 10), mm, yy, m[2])) continue;
+    headers.push({ dia: parseInt(m[1], 10), mes: '', anyo: '', index: m.index });
+  }
+  HEADER_DIA_LINEA.lastIndex = 0;
+  while ((m = HEADER_DIA_LINEA.exec(programa)) !== null) {
+    if (headers.some((h) => Math.abs(h.index - m.index) < 12)) continue;
+    headers.push({ dia: parseInt(m[1], 10), mes: m[3] || '', anyo: '', index: m.index });
   }
   DIA_EL_MES.lastIndex = 0;
   while ((m = DIA_EL_MES.exec(programa)) !== null) {
@@ -413,9 +489,18 @@ export function partirPorDias(programa: string): SeccionDia[] {
     headers.push({ dia: parseInt(m[1], 10), mes: m[2], anyo: m[3] || '', index: m.index });
   }
   headers.sort((a, b) => a.index - b.index);
+  // "A su término / A continuación" suele ir en un recuadro ANTES del encabezado
+  // del día al que pertenece (Tacoronte: "A su término BAILE POPULAR…" justo
+  // antes de "26 Sábado"). Se arrastra esa cláusula al día siguiente.
+  const CONECTOR = /(?:A su término)\b[^.]*\.\s*$/i;
+  const limites = headers.map((h) => {
+    const prev = programa.slice(Math.max(0, h.index - 320), h.index);
+    const m = prev.match(CONECTOR);
+    return m ? h.index - (prev.length - m.index) : h.index;
+  });
   headers.forEach((h, i) => {
-    const fin = i + 1 < headers.length ? headers[i + 1].index : programa.length;
-    out.push({ dia: h.dia, mes: h.mes, anyo: h.anyo, texto: programa.slice(h.index, fin) });
+    const fin = i + 1 < headers.length ? limites[i + 1] : programa.length;
+    out.push({ dia: h.dia, mes: h.mes, anyo: h.anyo, texto: programa.slice(limites[i], fin) });
   });
   return out;
 }

@@ -20,6 +20,11 @@ de los ayuntamientos (caché 1h por adaptador) y filtra verbenas con patrones.
 - Tegueste DESCUBRE programas: cada ciclo lee /fiestas/ y procesa los PDF
   "programa+fiestas" que encuentre. Un PDF nuevo en diciembre entra solo.
   PDFs escaneados se avisan y quedan para Fase 2 (IA visión).
+- Programas publicados SOLO como imágenes (p. ej. Arico): OCR offline con
+  Vision de macOS y caché versionada. `node scripts/ocr-programas.mjs
+  --municipio=arico --url=<pagina>` descarga las páginas, las OCR-ea y escribe
+  `src/lib/data/ocr-programas.json`; el adaptador lo lee con `textoOcr()`
+  (portable a Vercel, sin OCR en runtime). Requiere macOS con `swiftc`.
 - Filtro: título con baile/verbena/orquesta, `amenizado por`, diccionario de
   orquestas, hora 20-23h, lugar plaza/parque. Descarte: misa, teatro, expo, cuentos.
   Títulos tipo "Fiestas de X" entran como contenedores y se parten por días.

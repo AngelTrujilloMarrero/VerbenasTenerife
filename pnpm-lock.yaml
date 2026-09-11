@@ -17,6 +17,9 @@ importers:
       pdfjs-dist:
         specifier: ^6.3.289
         version: 6.3.289
+      undici:
+        specifier: ^7.29.1
+        version: 7.29.1
     devDependencies:
       '@astrojs/node':
         specifier: ^11.1.5
