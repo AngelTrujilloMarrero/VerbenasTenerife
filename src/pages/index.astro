@@ -2,10 +2,9 @@
 export const prerender = false;
 import { FUENTES } from '../lib/verbenas.js';
 
-// Shell instantánea: NO se espera a ningún scraper aquí. Solo se incrusta la
-// lista de fuentes (código, no datos) y el navegador pide cada municipio
-// por separado a /api/verbenas.json, actualizando la barra de progreso.
-// ?municipio=arona|adeje limita las fuentes desde el primer momento.
+// Shell instantánea estilo DeBelingo: fondo oscuro, cabecera azul→púrpura,
+// días en amarillo, tarjetas con bordes laterales por tipo.
+// Los datos llegan en vivo por municipio (barra de progreso + chips).
 const filtro = Astro.url.searchParams.get('municipio') || undefined;
 const fuentes = (filtro
   ? FUENTES.filter((f) => f.id === filtro.toLowerCase())
@@ -17,66 +16,163 @@ const fuentes = (filtro
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Verbenas Tenerife — piloto</title>
+  <title>Verbenas Tenerife — Próximas Verbenas</title>
   <style>
-    body { font-family: system-ui, sans-serif; max-width: 860px; margin: 2rem auto; padding: 0 1rem; }
-    .card { border: 1px solid #ddd; border-radius: 12px; padding: 1rem; margin: 1rem 0; }
-    .card.pasada { opacity: .65; }
-    .meta { color: #555; font-size: .9rem; }
-    .badge { display: inline-block; background: #111; color: #fff; border-radius: 999px; padding: .15rem .6rem; font-size: .8rem; }
-    .muni { display: inline-block; background: #0a58ca; color: #fff; border-radius: 999px; padding: .15rem .6rem; font-size: .8rem; }
-    nav a { margin-right: .75rem; }
-    details.pasadas { margin-top: 2rem; border-top: 2px solid #eee; padding-top: 1rem; }
-    .progreso { background: #f1f3f5; border-radius: 12px; padding: 1rem; margin: 1rem 0; }
-    .barra-ext { background: #dee2e6; border-radius: 999px; height: 12px; overflow: hidden; margin: .5rem 0; }
-    .barra-int { background: #0a58ca; height: 100%; width: 0%; transition: width .3s; }
-    .chips { display: flex; flex-wrap: wrap; gap: .4rem; margin-top: .5rem; }
-    .chip { border-radius: 999px; padding: .15rem .6rem; font-size: .8rem; background: #e9ecef; }
-    .chip.ok { background: #d3f9d8; }
-    .chip.error { background: #ffc9c9; }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: system-ui, -apple-system, sans-serif; background: #111827; color: #fff; }
+    a { color: #93c5fd; }
+    /* Cabecera */
+    .cabecera { position: relative; background: #2563eb; padding: 12px 8px 8px; text-align: center; }
+    @media (min-width: 768px) { .cabecera { background: linear-gradient(to right, #2563eb, #9333ea); } }
+    .cabecera h1 { margin: 0; font-size: 1.25rem; font-weight: 800; display: flex; align-items: center; justify-content: center; gap: 8px; }
+    @media (min-width: 768px) { .cabecera h1 { font-size: 1.875rem; } }
+    .cabecera h1 svg { width: 20px; height: 20px; }
+    .badges { display: flex; align-items: center; justify-content: center; gap: 12px; margin-top: 4px; flex-wrap: wrap; }
+    .badge-update { display: flex; align-items: center; gap: 6px; background: rgba(30,58,138,.4); padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 800; color: #dbeafe; white-space: nowrap; }
+    .badge-fuente { background: rgba(31,41,55,.4); padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 800; color: #9ca3af; white-space: nowrap; }
+    .badge-fuente.ok { color: #6ee7b7; } .badge-fuente.error { color: #fca5a5; }
+    /* Progreso */
+    .progreso { max-width: 860px; margin: 12px auto 0; padding: 0 24px; }
+    .barra-ext { background: #374151; border-radius: 999px; height: 10px; overflow: hidden; margin: 6px 0; }
+    .barra-int { background: linear-gradient(to right, #3b82f6, #a855f7); height: 100%; width: 0%; transition: width .3s; }
+    .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; justify-content: center; }
+    .chip { border-radius: 999px; padding: 2px 10px; font-size: 12px; background: #1f2937; color: #9ca3af; border: 1px solid #374151; }
+    .chip.ok { background: rgba(6,78,59,.5); color: #6ee7b7; border-color: rgba(16,185,129,.3); }
+    .chip.error { background: rgba(127,29,29,.5); color: #fca5a5; border-color: rgba(239,68,68,.3); }
+    #progreso-texto { text-align: center; color: #9ca3af; font-size: 13px; }
+    /* Navegación municipios */
+    .nav-muni { text-align: center; padding: 10px; font-size: 14px; }
+    .nav-muni a { margin: 0 8px; color: #93c5fd; text-decoration: none; }
+    .nav-muni a.activo { color: #fff; font-weight: 800; text-decoration: underline; }
+    /* Días */
+    .lista { padding: 0 24px 24px; max-width: 860px; margin: 0 auto; }
+    .dia { border-top: 1px solid rgba(55,65,81,.3); }
+    .dia:first-child { border-top: none; }
+    .dia-titulo { margin: 12px 0; padding: 12px 0; text-align: center;
+      background: linear-gradient(to right, transparent, rgba(250,204,21,.1), transparent); }
+    .dia-titulo h3 { margin: 0; color: #facc15; font-size: 1.25rem; font-weight: 800; letter-spacing: .05em;
+      text-transform: uppercase; display: flex; align-items: center; justify-content: center; gap: 12px; }
+    .dia-titulo svg { width: 22px; height: 22px; opacity: .7; }
+    /* Tarjeta */
+    .card { position: relative; overflow: hidden; padding: 12px 16px; margin-bottom: 8px;
+      border: 1px solid rgba(55,65,81,.5); border-left-width: 4px; border-right-width: 4px; cursor: pointer; }
+    .card:hover { filter: brightness(1.1); }
+    .card .fila { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 12px 16px; text-align: center; }
+    .hora { font-family: ui-monospace, monospace; font-weight: 800; font-size: 1.35rem; color: #fff; }
+    .hora small { font-size: 12px; color: #9ca3af; font-weight: 400; }
+    .tipo-badge { padding: 4px 10px; background: rgba(6,182,212,.15); color: #67e8f9;
+      border-radius: 4px; font-size: 16px; border: 1px solid rgba(6,182,212,.2); }
+    .lugar { display: flex; align-items: center; gap: 6px; color: #d1d5db; font-size: 18px; }
+    .lugar svg { width: 20px; height: 20px; color: #6b7280; flex-shrink: 0; }
+    .orquestas { display: flex; align-items: center; gap: 8px; color: #4ade80; font-weight: 600; font-size: 18px; }
+    .orquestas svg { width: 20px; height: 20px; opacity: .6; flex-shrink: 0; }
+    .titulo { flex-basis: 100%; color: #fff; font-weight: 700; font-size: 17px; line-height: 1.35; }
+    .chev { background: none; border: none; color: #6b7280; cursor: pointer; padding: 4px; }
+    .chev svg { width: 16px; height: 16px; transition: transform .3s; }
+    .chev.abierto svg { transform: rotate(180deg); }
+    .detalle { display: none; margin-top: 16px; padding-top: 16px; border-top: 1px solid rgba(75,85,99,.5); }
+    .detalle.abierto { display: block; }
+    .detalle-box { background: rgba(0,0,0,.2); padding: 16px; border-radius: 8px; }
+    .detalle-box h4 { margin: 0 0 12px; color: #93c5fd; font-size: 14px; text-transform: uppercase; letter-spacing: .05em; }
+    .btns { display: flex; flex-wrap: wrap; gap: 12px; padding-top: 8px; margin-top: 8px; border-top: 1px solid rgba(55,65,81,.5); }
+    .btn { display: inline-flex; align-items: center; gap: 8px; padding: 8px 16px; border-radius: 8px;
+      font-size: 14px; font-weight: 500; text-decoration: none; border: 1px solid; }
+    .btn-titsa { background: rgba(20,83,45,.5); color: #6ee7b7; border-color: rgba(16,185,129,.3); }
+    .btn-llegar { background: rgba(6,78,59,.5); color: #6ee7b7; border-color: rgba(16,185,129,.3); }
+    .btn-fuente { background: rgba(30,58,138,.5); color: #bfdbfe; border-color: rgba(59,130,246,.3); }
+    .motivos { color: #9ca3af; font-size: 12px; margin-top: 8px; }
+    /* Leyenda + pie */
+    .leyenda { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 16px;
+      font-size: 10px; color: #6b7280; padding: 0 24px 16px; max-width: 860px; margin: 0 auto; }
+    .leyenda i { display: inline-block; width: 12px; height: 3px; border-radius: 999px; margin-right: 4px; vertical-align: middle; }
+    .pie { background: linear-gradient(to right, #1f2937, #374151); padding: 24px; text-align: center;
+      color: #f59e0b; font-weight: 700; font-size: 14px; }
+    .pie small { display: block; color: #9ca3af; font-weight: 400; margin-top: 4px; }
+    details.pasadas { max-width: 860px; margin: 0 auto; padding: 16px 24px 32px; }
+    details.pasadas summary { cursor: pointer; color: #9ca3af; font-weight: 700; }
+    details.pasadas .card { opacity: .65; }
+    .vacio { text-align: center; color: #9ca3af; padding: 40px 0; }
   </style>
 </head>
 <body>
-  <h1>Verbenas Tenerife <span class="badge">piloto</span></h1>
-  <nav>
-    <a href="/">Todas</a>
-    {FUENTES.map(f => <a href={`/?municipio=${f.id}`}>{f.nombre}</a>)}
-  </nav>
+  <header class="cabecera">
+    <h1>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+      Próximas Verbenas
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+    </h1>
+    <div class="badges">
+      <span class="badge-update">🕐 ACTUALIZADO: <span id="badge-hoy">…</span></span>
+      <span class="badge-fuente" id="badge-fuentes">⏳ conectando…</span>
+      <a class="badge-fuente" id="badge-json" href="/api/verbenas.json" style="text-decoration:none">ver JSON</a>
+    </div>
+  </header>
 
-  <section class="progreso" aria-live="polite">
+  <nav class="nav-muni" id="nav-muni"></nav>
+
+  <section class="progreso">
     <div id="progreso-texto">Preparando…</div>
     <div class="barra-ext"><div class="barra-int" id="progreso-barra"></div></div>
     <div class="chips" id="progreso-chips"></div>
   </section>
 
-  <h2>Próximas verbenas (<span id="contador-futuras">0</span>)</h2>
-  <div id="lista-futuras"><p class="meta">Cargando municipios…</p></div>
+  <main class="lista" id="lista"></main>
+
+  <div class="leyenda" id="leyenda"></div>
 
   <details class="pasadas">
-    <summary><strong>Ya celebradas (<span id="contador-pasadas">0</span>)</strong> — listado inferior, solo historial</summary>
+    <summary>Ya celebradas (<span id="contador-pasadas">0</span>) — historial</summary>
     <div id="lista-pasadas"></div>
   </details>
 
-  <noscript><p>Necesitas JavaScript para cargar las agendas en vivo.</p></noscript>
+  <footer class="pie">
+    <div>Última actualización: <span id="pie-hoy">…</span></div>
+    <small>VerbenasTenerife · datos en vivo de los ayuntamientos · <span id="pie-total">0</span> verbenas</small>
+  </footer>
+
+  <noscript><p style="text-align:center">Necesitas JavaScript para cargar las agendas en vivo.</p></noscript>
 
   <script define:vars={{ fuentes }}>
-    const texto = document.getElementById('progreso-texto');
-    const barra = document.getElementById('progreso-barra');
-    const chipsBox = document.getElementById('progreso-chips');
-    const listaFuturas = document.getElementById('lista-futuras');
-    const listaPasadas = document.getElementById('lista-pasadas');
-    const contFut = document.getElementById('contador-futuras');
-    const contPas = document.getElementById('contador-pasadas');
+    // Paleta por tipo (réplica DeBelingo; Concierto/Fiestas propios)
+    const TIPO = {
+      'Baile Normal':  { b: '#60a5fa', g: 'rgba(96,165,250,0.15)' },
+      'Baile Magos':   { b: '#a855f7', g: 'rgba(168,85,247,0.15)' },
+      'Romería':       { b: '#f59e0b', g: 'rgba(245,158,11,0.15)' },
+      'Inclusiva':     { b: '#2dd4bf', g: 'rgba(45,212,191,0.15)' },
+      'Concierto':     { b: '#e879f9', g: 'rgba(232,121,249,0.15)' },
+      'Fiestas':       { b: '#fbbf24', g: 'rgba(251,191,36,0.15)' },
+      'Romería Chica': { b: '#fbbf24', g: 'rgba(251,191,36,0.15)' },
+      'Carnaval':      { b: '#e879f9', g: 'rgba(232,121,249,0.15)' }
+    };
+    const porDefecto = { b: '#9ca3af', g: 'rgba(156,163,175,0.15)' };
+    const DIAS = ['DOMINGO', 'LUNES', 'MARTES', 'MIÉRCOLES', 'JUEVES', 'VIERNES', 'SÁBADO'];
+    const MESES = ['ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO', 'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE'];
+
+    const $ = (id) => document.getElementById(id);
+    const texto = $('progreso-texto'), barra = $('progreso-barra'), chipsBox = $('progreso-chips');
+    const lista = $('lista'), listaPas = $('lista-pasadas'), leyenda = $('leyenda');
+
+    const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) =>
+      ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+    const svgPin = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>';
+    const svgMus = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>';
+    const svgCal = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>';
+    const svgChev = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>';
 
     const total = fuentes.length;
     const todas = [];
     let hechas = 0;
     const chips = {};
+    let grupoAbierto = null;
 
-    const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) =>
-      ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    // Nav municipios
+    const params = new URLSearchParams(location.search);
+    const fActual = params.get('municipio');
+    $('nav-muni').innerHTML = `<a href="/" class="${!fActual ? 'activo' : ''}">Todas</a>` +
+      fuentes.map((f) => `<a href="/?municipio=${f.id}" class="${fActual === f.id ? 'activo' : ''}">${esc(f.nombre)}</a>`).join('');
+    $('badge-json').href = fActual ? `/api/verbenas.json?municipio=${fActual}` : '/api/verbenas.json';
 
-    // Pinta un chip por municipio: ⏳ → ✓/✗, para saber qué ha llegado.
     fuentes.forEach((f) => {
       const el = document.createElement('span');
       el.className = 'chip';
@@ -85,30 +181,90 @@ const fuentes = (filtro
       chips[f.id] = el;
     });
 
-    const claveFecha = (v) => {
-      const [d, m, y] = String(v.day || '').split('-');
-      return `${y || '9999'}-${m || '99'}-${d || '99'} ${v.hora || '99:99'}`;
+    const aFecha = (day) => {
+      const [d, m, y] = String(day || '').split('-').map(Number);
+      return new Date(Date.UTC(y || 9999, (m || 1) - 1, d || 1));
+    };
+    const nombreDia = (day) => {
+      if (!day) return 'FECHA POR CONFIRMAR';
+      const f = aFecha(day);
+      return `${DIAS[f.getUTCDay()]} ${String(f.getUTCDate()).padStart(2, '0')} DE ${MESES[f.getUTCMonth()]}`;
+    };
+    const ord = (a, b) => (aFecha(a.day) - aFecha(b.day)) || String(a.hora).localeCompare(String(b.hora));
+
+    const mapsUrl = (v, mode) => {
+      const addr = v.lugar ? `${v.lugar}, ${v.municipio}, Tenerife` : `${v.municipio}, Tenerife`;
+      return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(addr)}&travelmode=${mode}`;
     };
 
-    const tarjeta = (v, pasada) => `
-      <article class="card${pasada ? ' pasada' : ''}">
-        <h3>${esc(v.titulo)}</h3>
-        <p class="meta"><span class="muni">${esc(v.municipio)}</span>
-          ${esc(v.day || 'fecha por confirmar')} · ${esc(v.hora)} h ·
-          ${esc(v.lugar)} · ${esc(v.tipo)}${pasada ? '' : ` · score ${v.score ?? ''}`}</p>
-        ${(v.orquestas || []).length ? `<p><strong>Orquestas:</strong> ${esc(v.orquestas.join(' + '))}</p>` : ''}
-        <p><a href="${esc(v.url)}">Fuente original</a></p>
-        ${(!pasada && v.motivos) ? `<details><summary>Por qué se clasificó así</summary><p class="meta">${esc(v.motivos.join(' · '))}</p></details>` : ''}
+    const tarjeta = (v) => {
+      const t = TIPO[v.tipo] || porDefecto;
+      const orq = (v.orquestas || []).join(' + ');
+      const abierta = grupoAbierto === v.id ? ' abierto' : '';
+      const mostrada = grupoAbierto === v.id ? 'abierto' : '';
+      return `
+      <article class="card" data-id="${esc(v.id)}"
+        style="background:linear-gradient(to right, ${t.g}, transparent 50%, ${t.g});border-left-color:${t.b};border-right-color:${t.b}">
+        <div class="fila">
+          <div class="hora">${esc(v.hora)} <small>H</small></div>
+          ${v.tipo && v.tipo !== 'Baile Normal' ? `<div class="tipo-badge">${esc(v.tipo)}</div>` : ''}
+          <div class="lugar">${svgPin}<span>${esc(v.lugar ? v.lugar + ', ' : '')}${esc(v.municipio)}</span></div>
+          <button class="chev${abierta}" data-chev="${esc(v.id)}" aria-label="Ver detalles">${svgChev}</button>
+          <div class="titulo">${esc(v.titulo)}</div>
+          ${orq ? `<div class="orquestas">${svgMus}<span>${esc(orq)}</span></div>` : ''}
+        </div>
+        <div class="detalle ${mostrada}" data-det="${esc(v.id)}">
+          <div class="detalle-box">
+            <h4>Información del evento</h4>
+            <div class="btns">
+              <a class="btn btn-llegar" target="_blank" rel="noopener" href="${mapsUrl(v, 'driving')}">🚗 Cómo llegar</a>
+              <a class="btn btn-titsa" target="_blank" rel="noopener" href="${mapsUrl(v, 'transit')}">🚌 TITSA</a>
+              <a class="btn btn-fuente" target="_blank" rel="noopener" href="${esc(v.url)}">🔗 Fuente oficial</a>
+            </div>
+            ${(v.motivos || []).length ? `<p class="motivos">Detectada por: ${esc(v.motivos.join(' · '))} (score ${v.score ?? ''})</p>` : ''}
+          </div>
+        </div>
       </article>`;
+    };
 
     function render() {
-      const fut = todas.filter((v) => v.futura).sort((a, b) => claveFecha(a) < claveFecha(b) ? -1 : 1);
-      const pas = todas.filter((v) => !v.futura).sort((a, b) => claveFecha(a) < claveFecha(b) ? -1 : 1);
-      contFut.textContent = fut.length;
-      contPas.textContent = pas.length;
-      listaFuturas.innerHTML = fut.length ? fut.map((v) => tarjeta(v, false)).join('') : '<p class="meta">Sin verbenas próximas en los municipios cargados.</p>';
-      listaPasadas.innerHTML = pas.length ? pas.map((v) => tarjeta(v, true)).join('') : '<p class="meta">Nada por aquí todavía.</p>';
+      const fut = todas.filter((v) => v.futura).sort(ord);
+      const pas = todas.filter((v) => !v.futura).sort(ord);
+      // Agrupa por día como DeBelingo
+      const grupos = {};
+      fut.forEach((v) => { (grupos[v.day || ''] = grupos[v.day || ''] || []).push(v); });
+      lista.innerHTML = Object.keys(grupos).sort().map((day) => `
+        <section class="dia">
+          <div class="dia-titulo"><h3>${svgCal}<span>${esc(nombreDia(day))}</span>${svgCal}</h3></div>
+          ${grupos[day].map(tarjeta).join('')}
+        </section>`).join('') || '<p class="vacio">Sin verbenas próximas en los municipios cargados.</p>';
+      $('contador-pasadas').textContent = pas.length;
+      listaPas.innerHTML = pas.map(tarjeta).join('') || '<p class="vacio">Nada por aquí todavía.</p>';
+      // Leyenda de tipos activos
+      const tipos = [...new Set(todas.map((v) => v.tipo).filter(Boolean))];
+      leyenda.innerHTML = tipos.map((tipo) => {
+        const t = TIPO[tipo] || porDefecto;
+        return `<span><i style="background:${t.b}"></i>${esc(tipo)}</span>`;
+      }).join('');
+      $('pie-total').textContent = todas.length;
     }
+
+    lista.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-chev]');
+      const card = e.target.closest('.card');
+      const id = btn ? btn.dataset.chev : (card ? card.dataset.id : null);
+      if (!id) return;
+      grupoAbierto = grupoAbierto === id ? null : id;
+      document.querySelectorAll(`[data-det="${CSS.escape(id)}"]`).forEach((d) => d.classList.toggle('abierto', grupoAbierto === id));
+      document.querySelectorAll(`[data-chev="${CSS.escape(id)}"]`).forEach((b) => b.classList.toggle('abierto', grupoAbierto === id));
+    });
+    listaPas.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-chev]');
+      if (!btn) return;
+      const id = btn.dataset.chev;
+      document.querySelectorAll(`#lista-pasadas [data-det="${CSS.escape(id)}"]`).forEach((d) => d.classList.toggle('abierto'));
+      btn.classList.toggle('abierto');
+    });
 
     function avanza() {
       hechas++;
@@ -116,6 +272,9 @@ const fuentes = (filtro
       if (hechas >= total) {
         const n = todas.filter((v) => v.futura).length;
         texto.textContent = `Listo: ${hechas}/${total} municipios · ${n} próximas.`;
+        const bf = $('badge-fuentes');
+        bf.textContent = `✓ ${hechas}/${total} municipios`;
+        bf.classList.add('ok');
       }
     }
 
@@ -125,11 +284,11 @@ const fuentes = (filtro
         const r = await fetch(`/api/verbenas.json?municipio=${f.id}&filtro=todas`);
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         const d = await r.json();
-        const n = (d.verbenas || []).length;
+        if (d.hoy) { $('badge-hoy').textContent = d.hoy; $('pie-hoy').textContent = d.hoy; }
         todas.push(...(d.verbenas || []));
         chips[f.id].className = 'chip ok';
-        chips[f.id].textContent = `✓ ${f.nombre} (${n})`;
-      } catch (e) {
+        chips[f.id].textContent = `✓ ${f.nombre} (${(d.verbenas || []).length})`;
+      } catch (err) {
         chips[f.id].className = 'chip error';
         chips[f.id].textContent = `✗ ${f.nombre} (falló)`;
       }
@@ -137,12 +296,9 @@ const fuentes = (filtro
       render();
     }
 
-    // Lotes de 4 en paralelo: progresivo sin acribillar al servidor
-    // (importante cuando sean 31 municipios).
     async function main() {
       if (!total) {
         texto.textContent = 'Municipio desconocido.';
-        listaFuturas.innerHTML = '';
         return;
       }
       texto.textContent = `Cargando 0/${total} municipios…`;

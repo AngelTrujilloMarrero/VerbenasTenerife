@@ -8,8 +8,10 @@ de los ayuntamientos (caché 1h por adaptador) y filtra verbenas con patrones.
 - La página es shell instantánea (~0.04s): pinta barra de progreso + chips por
   municipio y carga cada fuente en paralelo (lotes de 4) desde la API,
   ordenando y separando próximas/celebradas en el navegador.
-- La página muestra arriba las próximas (fecha >= hoy) y abajo, colapsado,
-  el listado inferior de ya celebradas. `src/lib/fechas.ts` (`esFutura`).
+- La página replica el formato de DeBelingo (fondo oscuro, cabecera azul→púrpura,
+  días amarillos agrupados, tarjetas con borde lateral por tipo, leyenda,
+  detalle expandible con Cómo llegar/TITSA/fuente oficial). Sin honeypots ni
+  marcas de agua: aquí el contenido es propio.
 - Lógica: `src/lib/classifier.ts` (patrones + `partirPorDias` + `tipoDeEvento`),
   adaptadores `src/lib/arona.ts` / `src/lib/adeje.ts` / `src/lib/tegueste.ts`,
   agregador `src/lib/verbenas.ts`, PDFs en `src/lib/pdf.ts` (pdfjs-dist, gratis).
