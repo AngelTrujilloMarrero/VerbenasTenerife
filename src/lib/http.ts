@@ -1,5 +1,7 @@
 // Helper HTTP compartido (una sola UA para los 31 aytos).
 // Con timeout: una fuente colgada falla rápido (chip ✗) en vez de colgar la petición.
+import * as cheerio from 'cheerio';
+
 export async function fetchText(url: string, timeoutMs = 25000): Promise<string> {
   const r = await fetch(url, {
     headers: { 'User-Agent': 'VerbenasTenerife/0.1 (piloto; contacto admin)' },
@@ -40,6 +42,15 @@ export function textoConSaltos(html: string): string {
     .map((l) => decodificarEntidades(l).replace(/[\s\u00A0]+/g, ' ').trim())
     .filter((l) => l.length > 0)
     .join('\n');
+}
+
+/** Texto visible del body: SIN scripts/estilos. cheerio.text() los incluye y
+ *  el JS inline contamina lugar, fechas y clasificador
+ *  ("Lugar: La Quinta, Adeje function mostrarEventosPasados(){ $('#boto..."). */
+export function textoVisible(html: string): string {
+  const $ = cheerio.load(html);
+  $('script, style, noscript').remove();
+  return $('body').text().replace(/\s+/g, ' ');
 }
 
 /** Decodifica entidades HTML (&nbsp;, &amp;, &mdash;...). Sin esto los

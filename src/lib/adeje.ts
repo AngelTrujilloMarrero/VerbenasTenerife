@@ -3,12 +3,14 @@ import {
   clasificarDetalle,
   clasificarTitulo,
   esContenedor,
+  extraerLugar,
   extraerSubEventos,
   mesANum,
   partirPorDias,
+  RE_LUGAR_CODIGO,
   tipoDeEvento
 } from './classifier.js';
-import { fetchText } from './http.js';
+import { fetchText, textoVisible } from './http.js';
 import type { Verbena } from './types.js';
 
 const BASE = 'https://www.adeje.es';
@@ -18,12 +20,20 @@ export const ADEJE_URL = `${BASE}/agenda`;
 let cache: { at: number; data: Verbena[] } | null = null;
 const TTL = 1000 * 60 * 60;
 
-function normFechaEstatica(cuerpo: string): { mes: string; anyo: string } {
-  // "Del 11 al 13 de septiembre de 2026" -> mes/anyo del rango
+function normFechaEstatica(cuerpo: string): { mes: string; anyo: string } {  // "Del 11 al 13 de septiembre de 2026" -> mes/anyo del rango
   const m = cuerpo.match(/del\s+\d{1,2}\s+al\s+\d{1,2}\s+de\s+([a-záéíóúñ]+)\s+de\s+(\d{4})/i)
     || cuerpo.match(/de\s+([a-záéíóúñ]+)\s+de\s+(\d{4})/i);
   if (!m) return { mes: '', anyo: '2026' };
   return { mes: mesANum(m[1]), anyo: m[2] };
+}
+
+/** "Lugar:" desde el HTML (<strong>Lugar:</strong><br>La Quinta, Adeje).
+ *  Preciso: en texto plano el valor corre hasta el menú (sin puntos). */
+function lugarEstructurado(html: string): string {
+  const v = (html.match(/<strong>\s*Lugar:\s*<\/strong>\s*<br\s*\/?>\s*([^<]{2,80})/i)?.[1] || '')
+    .replace(/\s+/g, ' ').trim();
+  if (!v || RE_LUGAR_CODIGO.test(v)) return '';
+  return v;
 }
 
 /** Adaptador Adeje: lista /agenda (links /evento/ID) + detalle con programa por días. */
@@ -55,10 +65,8 @@ export async function obtenerVerbenasAdeje(): Promise<Verbena[]> {
 
     try {
       const d = await fetchText(it.url);
-      const $$ = cheerio.load(d);
-      const cuerpo = $$('body').text().replace(/\s+/g, ' ');
-      const lugar = cuerpo.match(/Lugar:\s*([^.]{3,80}?)(?:\s{2,}|$)/i)?.[1]?.trim()
-        || cuerpo.match(/Lugar:\s*([^.]{3,80})/i)?.[1]?.trim() || 'Adeje';
+      const cuerpo = textoVisible(d);
+      const lugar = lugarEstructurado(d) || extraerLugar(cuerpo, 'Adeje');
       const ctx = normFechaEstatica(cuerpo);
 
       // 1) Programa multi-día: partir por "Sábado 12 de septiembre" y buscar bailes

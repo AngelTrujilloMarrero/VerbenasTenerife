@@ -1,6 +1,6 @@
 import * as cheerio from 'cheerio';
-import { clasificarDetalle, extraerSubEventos, tipoDeEvento } from './classifier.js';
-import { fetchText } from './http.js';
+import { clasificarDetalle, extraerLugar, extraerSubEventos, tipoDeEvento } from './classifier.js';
+import { fetchText, textoVisible } from './http.js';
 import type { Verbena } from './types.js';
 
 const BASE = 'https://www.arona.org';
@@ -53,10 +53,10 @@ export async function obtenerVerbenasArona(): Promise<Verbena[]> {
     try {
       const d = await fetchText(it.url);
       const $$ = cheerio.load(d);
-      const cuerpo = $$('body').text().replace(/\s+/g, ' ');
+      const cuerpo = textoVisible(d);
 
       const lugar = ($$('a[href*="google.com/maps"]').first().text().trim().replace(/^place/i, '')
-        || cuerpo.match(/Lugar:\s*([^.]{3,80})/i)?.[1]?.trim() || '').trim();
+        || extraerLugar(cuerpo, '')).trim();
       const fechaHora = cuerpo.match(/(VI|SÁ|DO|LU|MA|MI|JU)\.\s*(\d{1,2})\s*SEP\.?\s*(\d{4})?/i);
       const hora = cuerpo.match(/(\d{1,2}:\d{2})\s*h/i)?.[1] || '';
       const day = fechaHora ? `${fechaHora[2].padStart(2, '0')}-09-${fechaHora[4] || '2026'}` : '';

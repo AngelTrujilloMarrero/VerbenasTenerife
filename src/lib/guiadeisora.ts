@@ -8,7 +8,7 @@ import {
   partirPorDias,
   tipoDeEvento
 } from './classifier.js';
-import { fetchText } from './http.js';
+import { fetchText, textoVisible } from './http.js';
 import type { Verbena } from './types.js';
 
 const BASE = 'https://www.guiadeisora.org';
@@ -97,7 +97,7 @@ export async function obtenerVerbenasGuiaDeIsora(): Promise<Verbena[]> {
   for (const n of await noticiasCandidatas()) {
     try {
       const d = await fetchText(n.url);
-      const cuerpo = cheerio.load(d)('body').text().replace(/\s+/g, ' ');
+      const cuerpo = textoVisible(d);
       const day = diaDeNoticia(cuerpo);
       const secs = partirPorDias(cuerpo);
       if (secs.length) {

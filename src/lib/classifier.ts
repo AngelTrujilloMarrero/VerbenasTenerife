@@ -16,6 +16,16 @@ const HORA_NOCTURNA = /(19|2[0-3]|21):\d{2}/;
 
 const ANTI_PATRON = /\b(beb[ée]cuento|exposici[óo]n|teatro|cuentos?|taller|flamenco.*poes[íi]a|misa|rosario|procesi[óo]n|rezo|bono comercio|filos[óo]fico|cuenta-?cuentos?)\b/i;
 
+// Trozos de JS/CSS colados ("function mostrarEventosPasados(){ $('#boto...").
+export const RE_LUGAR_CODIGO = /[{}$#;]|function\s|=>|\bvar\s|\bconst\s|\blet\s/;
+
+/** "Lugar: X" del texto, o fallback si está vacío o trae código colado. */
+export function extraerLugar(cuerpo: string, fallback = ''): string {
+  const m = cuerpo.match(/Lugar:\s*([^.]{3,80})/i)?.[1]?.trim() || '';
+  if (!m || RE_LUGAR_CODIGO.test(m)) return fallback;
+  return m;
+}
+
 // Filtro histórico: 167 orquestas con >=2 actuaciones en 2024-25,
 // generadas con scripts/extraer-orquestas.mjs desde los archives de DeBelingo.
 import HIST from './data/orquestas.json';
