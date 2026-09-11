@@ -1,6 +1,7 @@
 ---
 export const prerender = false;
 import { FUENTES } from '../lib/verbenas.js';
+import { coordsDe } from '../lib/coords.js';
 
 // Shell instantánea estilo DeBelingo: fondo oscuro, cabecera azul→púrpura,
 // días en amarillo, tarjetas con bordes laterales por tipo.
@@ -9,7 +10,7 @@ const filtro = Astro.url.searchParams.get('municipio') || undefined;
 const fuentes = (filtro
   ? FUENTES.filter((f) => f.id === filtro.toLowerCase())
   : FUENTES
-).map((f) => ({ id: f.id, nombre: f.nombre }));
+).map((f) => ({ id: f.id, nombre: f.nombre, ...coordsDe(f.nombre) }));
 ---
 
 <html lang="es">
@@ -62,6 +63,8 @@ const fuentes = (filtro
     .card .fila { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 12px 16px; text-align: center; }
     .hora { font-family: ui-monospace, monospace; font-weight: 800; font-size: 1.35rem; color: #fff; }
     .hora small { font-size: 12px; color: #9ca3af; font-weight: 400; }
+    .meteo { display: inline-flex; align-items: center; gap: 4px; font-size: 15px; color: #bfdbfe;
+      background: rgba(30,58,138,.35); border: 1px solid rgba(59,130,246,.25); border-radius: 6px; padding: 2px 8px; }
     .tipo-badge { padding: 4px 10px; background: rgba(6,182,212,.15); color: #67e8f9;
       border-radius: 4px; font-size: 16px; border: 1px solid rgba(6,182,212,.2); }
     .lugar { display: flex; align-items: center; gap: 6px; color: #d1d5db; font-size: 18px; }
@@ -192,17 +195,62 @@ const fuentes = (filtro
       const f = aFecha(day);
       return `${DIAS[f.getUTCDay()]} ${String(f.getUTCDate()).padStart(2, '0')} DE ${MESES[f.getUTCMonth()]}`;
     };
-    // Orden: de más nueva a más vieja (al revés que DeBelingo).
-    const ord = (a, b) => (aFecha(b.day) - aFecha(a.day)) || String(b.hora).localeCompare(String(a.hora));
+    // Orden de más próximo a más antiguo: futuras ascendente, pasadas descendente.
+    const ordFut = (a, b) => (aFecha(a.day) - aFecha(b.day)) || String(a.hora).localeCompare(String(b.hora));
+    const ordPas = (a, b) => (aFecha(b.day) - aFecha(a.day)) || String(b.hora).localeCompare(String(a.hora));
 
     const mapsUrl = (v, mode) => {
       const addr = v.lugar ? `${v.lugar}, ${v.municipio}, Tenerife` : `${v.municipio}, Tenerife`;
       return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(addr)}&travelmode=${mode}`;
     };
 
+    // Meteo Open-Meteo (gratis, sin clave): 1 petición por municipio con el
+    // rango de sus días futuros. La AEMET vendrá cuando exista su clave en Vercel.
+    const meteo = {};
+    const dmyAiso = (day) => { const [d, m, y] = String(day).split('-'); return `${y}-${m}-${d}`; };
+    const isoAdmy = (iso) => { const [y, m, d] = String(iso).split('-'); return `${d}-${m}-${y}`; };
+    const iconoMeteo = (code) => code === 0 ? '☀' : code === 1 ? '🌤️' : code === 2 ? '⛅'
+      : code === 3 ? '☁️' : [45, 48].includes(code) ? '🌫️' : [51, 53, 55].includes(code) ? '🌦️'
+      : [61, 63, 65, 80, 81, 82].includes(code) ? '🌧️' : [71, 73, 75, 77, 85, 86].includes(code) ? '🌨️'
+      : [95, 96, 99].includes(code) ? '⛈️' : '🌤️';
+
+    async function cargaMeteo(f, dias) {
+      if (f.lat == null || !dias.length) return;
+      const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
+      const isos = [...new Set(dias.map(dmyAiso))].filter((iso) => {
+        const diff = Math.round((new Date(iso + 'T00:00:00') - hoy) / 864e5);
+        return diff >= 0 && diff <= 16;
+      }).sort();
+      if (!isos.length) return;
+      try {
+        const url = `https://api.open-meteo.com/v1/forecast?latitude=${f.lat}&longitude=${f.lon}&daily=weathercode,temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=Atlantic%2FCanary&start_date=${isos[0]}&end_date=${isos[isos.length - 1]}`;
+        const r = await fetch(url);
+        const j = await r.json();
+        (j.daily?.time || []).forEach((t, i) => {
+          meteo[`${f.id}|${isoAdmy(t)}`] = {
+            tmax: Math.round(j.daily.temperature_2m_max[i]),
+            tmin: Math.round(j.daily.temperature_2m_min[i]),
+            code: j.daily.weathercode[i],
+            prec: j.daily.precipitation_probability_max?.[i]
+          };
+        });
+        render();
+      } catch (e) { /* sin meteo: la tarjeta sale igual */ }
+    }
+
+    const meteoDe = (v) => meteo[`${fuenteIdDe(v)}|${v.day}`];
+    const fuenteIdDe = (v) => {
+      const f = fuentes.find((x) => x.nombre === v.municipio);
+      return f ? f.id : '';
+    };
+
     const tarjeta = (v) => {
       const t = TIPO[v.tipo] || porDefecto;
       const orq = (v.orquestas || []).join(' + ');
+      const m = meteoDe(v);
+      const spanMeteo = m
+        ? `<span class="meteo" title="Máx ${m.tmax}° / mín ${m.tmin}°${m.prec != null ? ` · lluvia ${m.prec}%` : ''}">${iconoMeteo(m.code)} ${m.tmax}°/${m.tmin}°</span>`
+        : '';
       const abierta = grupoAbierto === v.id ? ' abierto' : '';
       const mostrada = grupoAbierto === v.id ? 'abierto' : '';
       return `
@@ -210,6 +258,7 @@ const fuentes = (filtro
         style="background:linear-gradient(to right, ${t.g}, transparent 50%, ${t.g});border-left-color:${t.b};border-right-color:${t.b}">
         <div class="fila">
           <div class="hora">${esc(v.hora)} <small>H</small></div>
+          ${spanMeteo}
           ${v.tipo && v.tipo !== 'Baile Normal' ? `<div class="tipo-badge">${esc(v.tipo)}</div>` : ''}
           <div class="lugar">${svgPin}<span>${esc(v.lugar ? v.lugar + ', ' : '')}${esc(v.municipio)}</span></div>
           <button class="chev${abierta}" data-chev="${esc(v.id)}" aria-label="Ver detalles">${svgChev}</button>
@@ -231,12 +280,12 @@ const fuentes = (filtro
     };
 
     function render() {
-      const fut = todas.filter((v) => v.futura).sort(ord);
-      const pas = todas.filter((v) => !v.futura).sort(ord);
-      // Agrupa por día como DeBelingo, pero de más nuevo a más viejo
+      const fut = todas.filter((v) => v.futura).sort(ordFut);
+      const pas = todas.filter((v) => !v.futura).sort(ordPas);
+      // Agrupa por día de más próximo a más antiguo
       const grupos = {};
       fut.forEach((v) => { (grupos[v.day || ''] = grupos[v.day || ''] || []).push(v); });
-      const dias = Object.keys(grupos).sort((x, y) => (aFecha(y) - aFecha(x)) || y.localeCompare(x));
+      const dias = Object.keys(grupos).sort((x, y) => (aFecha(x) - aFecha(y)) || x.localeCompare(y));
       lista.innerHTML = dias.map((day) => `
         <section class="dia">
           <div class="dia-titulo"><h3>${svgCal}<span>${esc(nombreDia(day))}</span>${svgCal}</h3></div>
@@ -292,6 +341,7 @@ const fuentes = (filtro
         todas.push(...(d.verbenas || []));
         chips[f.id].className = 'chip ok';
         chips[f.id].textContent = `✓ ${f.nombre} (${(d.verbenas || []).length})`;
+        cargaMeteo(f, (d.verbenas || []).filter((v) => v.futura).map((v) => v.day));
       } catch (err) {
         chips[f.id].className = 'chip error';
         chips[f.id].textContent = `✗ ${f.nombre} (falló)`;
