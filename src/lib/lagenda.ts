@@ -11,7 +11,7 @@ import {
   ventana
 } from './classifier.js';
 import { fetchText, fetchTextConSaltos } from './http.js';
-import { resolverMunicipio } from './municipios.js';
+import { normTxt, resolverMunicipio } from './municipios.js';
 import type { Verbena } from './types.js';
 
 const BASE = 'https://lagenda.org';
@@ -74,6 +74,33 @@ function municipioDe(item: ItemFinde, cuerpo: string): string {
     resolverMunicipio(cuerpo.slice(0, 2000)) || 'Tenerife';
 }
 
+const STOP_SLUG = new Set(['fiestas', 'fiesta', 'programa', 'programacion', 'tenerife',
+  'verbena', 'verbenas', 'baile', 'bailes', 'romeria', 'romerias', 'concierto', 'conciertos',
+  'festival', 'festivales', 'gala', 'galas', 'noche', 'noches', 'tardeo', 'tardeos',
+  'encuentro', 'encuentros', 'feria', 'ferias', 'carnaval', 'navidad', 'cabalgata',
+  'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto',
+  'septiembre', 'octubre', 'noviembre', 'diciembre', 'edicion', 'especial']);
+
+/** Regex tolerante a acentos/ñ para un token de slug ("medano" casa "Médano"). */
+function regexTol(tok: string): string {
+  const mapa: Record<string, string> = { a: '[aá]', e: '[eé]', i: '[ií]', o: '[oó]', u: '[uú]', n: '[nñ]' };
+  return tok.split('').map((c) => mapa[c] ?? c).join('');
+}
+
+/** Núcleo desde el slug validado en el texto ("benijos", "El Médano", "La Luz").
+ *  Solo si queda UN token claro tras quitar genéricos, municipio, meses y años. */
+function nucleoPrograma(cuerpo: string, url: string, municipio: string): string {
+  const slug = (url.split('/').filter(Boolean).pop() || '').toLowerCase();
+  const muniToks = new Set(normTxt(municipio).split(' '));
+  const toks = slug.split('-').filter((t) =>
+    t.length > 2 && !/^\d+$/.test(t) && !STOP_SLUG.has(t) && !muniToks.has(t));
+  if (toks.length !== 1) return '';
+  const intro = cuerpo.slice(0, 2000);
+  const m = intro.match(new RegExp(`((?:El|La|Los|Las)\\s+)?(${regexTol(toks[0])})\\b`, 'i'));
+  if (!m) return '';
+  return ((m[1] || '') + m[2]).trim();
+}
+
 /** Año desde los chips de fecha ("Sáb, 12/09/26"). OJO: coger el AÑO (26),
  *  no el mes (09): /(\d{1,2})\/(\d{1,2})\/(\d{2,4})/. */
 function anyoDe(texto: string, diaLista: string): string {
@@ -112,6 +139,8 @@ export async function obtenerVerbenasLagenda(): Promise<Verbena[]> {
       const municipio = municipioDe(it, cuerpo);
       const anyo = anyoDe(cuerpo, it.diaLista);
       const slug = it.url.split('/').pop() || 'ev';
+      // Núcleo del programa una vez por ficha (vale para todos sus días)
+      const nucleo = nucleoPrograma(cuerpo, it.url, municipio);
       for (const sec of partirPorDias(cuerpo)) {
         const mes = mesANum(sec.mes);
         if (!mes) continue;
@@ -125,8 +154,8 @@ export async function obtenerVerbenasLagenda(): Promise<Verbena[]> {
             day,
             hora: sub.hora,
             municipio,
-            // Recinto del programa > núcleo del índice > municipio
-            lugar: sub.lugar || lugarCercano(sec.texto, sub.titulo) || it.lugarTexto || municipio,
+            // Recinto del programa > núcleo de la ficha > núcleo del índice > municipio
+            lugar: sub.lugar || lugarCercano(sec.texto, sub.titulo) || nucleo || it.lugarTexto || municipio,
             orquestas: sub.orquestas,
             tipo: tipoDeEvento(sub.titulo),
             url: it.url,
