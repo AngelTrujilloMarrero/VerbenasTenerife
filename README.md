@@ -1,4 +1,4 @@
-# VerbenasTenerife (piloto: Arona + Adeje + Tegueste + La Laguna)
+# VerbenasTenerife (piloto: 5 municipios)
 
 Astro 7 SSR + scrapers en vivo. Sin BD todavía: cada visita lee las agendas
 de los ayuntamientos (caché 1h por adaptador) y filtra verbenas con patrones.
@@ -29,5 +29,6 @@ de los ayuntamientos (caché 1h por adaptador) y filtra verbenas con patrones.
   topónimos y genéricos ("Tenerife", "Calle", "Sergio"...) para no crear FPs.
 
 Estado: 15 eventos (6 Arona + 1 Adeje + 4 Tegueste + 4 La Laguna del programa
-del Cristo; 12 futuras + 3 pasadas).
+del Cristo; 12 futuras + 3 pasadas). Guía de Isora: monitor activo
+(EO AJAX + noticias) pero su web no publica la verbena del 12-13/09.
 Siguiente paso: 5º ayuntamiento o guardar en Firebase con el modelo `Event`.
