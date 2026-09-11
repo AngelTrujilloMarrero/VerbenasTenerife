@@ -181,7 +181,17 @@ export function extraerSubEventos(programaTexto: string): SubEvento[] {
   LINEA_BAILE.lastIndex = 0;
   while ((m = LINEA_BAILE.exec(programaTexto)) !== null) {
     const [, hora, tituloRaw, lugarRaw] = m;
-    const titulo = tituloRaw.trim().replace(/^[,\s:;·•\-–—]+/, '');
+    // El título puede arrastrar preámbulo ("con una verbena...", "se celebrará
+    // una verbena..."): recortar hasta el primer keyword.
+    let titulo = tituloRaw.trim().replace(/^[,\s:;·•\-–—]+/, '');
+    const ki = titulo.search(/gran baile|verbena|verbenazo|baile de magos|baile de taifa|tardeo|noche latina|noche boricua/i);
+    if (ki > 0) {
+      // Conservar "Fiesta Joven y Verbena" entero (si no, duplicaría con el
+      // path timeless que sí guarda el prefijo).
+      const prev = titulo.slice(0, ki);
+      const mF = prev.match(/fiesta(?:\s+\w+){0,2}\s+y\s*$/i);
+      titulo = ((mF ? prev.slice(mF.index) : '') + titulo.slice(ki)).trim();
+    }
     out.push({ day: '', hora, titulo, orquestas: extraerOrquestas(titulo), lugar: (lugarRaw || '').trim() });
   }
   return out;
@@ -337,6 +347,9 @@ export function ventana(texto: string, titulo: string, radio = 600): string {
 // Sin "Calle" a secas: suele ser callejero ("Calle Tordo"), no recinto.
 // [ \t] y no \s: un salto de línea NO puede formar parte del nombre.
 const RE_LUGAR = /(Plaza[ \t]+(?:de[ \t]+|del[ \t]+)?[^.\n,]{2,40}|Parque[ \t]+[^.\n,]{2,40}|Cancha[ \t]+[^.\n,]{2,40}|Recinto[ \t]+[^.\n,]{2,40}|Auditorio[ \t]+[^.\n,]{2,40}|Teatro[ \t]+[^.\n,]{2,40}|Pabell[oó]n[ \t]+[^.\n,]{2,40}|Polideportivo[ \t]+[^.\n,]{2,40}|Mercado[ \t]+[^.\n,]{2,40}|Iglesia[ \t]+[^.\n,]{2,40}|Ermita[ \t]+[^.\n,]{2,40})/gi;
+// "Casco" aparte y SIN /i: con insensible cazaría "casco histórico con la
+// participación..." (minúsculas). Solo vale con nombre propio en mayúscula.
+const RE_LUGAR_CASCO = /(Casco[ \t]+(?:de\s+|del\s+)?[A-ZÁÉÍÓÚÑ][^.\n,]{0,30})/g;
 
 // Rutas, no recintos ("procesión desde la iglesia hasta el muelle").
 const RE_LUGAR_MALO = /\b(hasta|desde|hacia|recorrido|trayecto|salida|llegada|acompa\w*|itinerario|recorrido)\b/i;
@@ -347,11 +360,19 @@ export function lugarCercano(seccion: string, titulo: string, radio = 400): stri
   const prev = idx === -1 ? seccion.slice(0, 600) : seccion.slice(Math.max(0, idx - radio), idx);
   let m: RegExpExecArray | null;
   let ultimo = '';
-  RE_LUGAR.lastIndex = 0;
-  while ((m = RE_LUGAR.exec(prev)) !== null) {
-    const cand = m[1].trim();
-    if (!RE_LUGAR_MALO.test(cand)) ultimo = cand;
-  }
+  let ultimoIdx = -1;
+  const considera = (re: RegExp) => {
+    re.lastIndex = 0;
+    while ((m = re.exec(prev)) !== null) {
+      const cand = m[1].trim();
+      if (!RE_LUGAR_MALO.test(cand) && m.index >= ultimoIdx) {
+        ultimo = cand;
+        ultimoIdx = m.index;
+      }
+    }
+  };
+  considera(RE_LUGAR);
+  considera(RE_LUGAR_CASCO);
   return ultimo;
 }
 

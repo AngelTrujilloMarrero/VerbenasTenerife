@@ -1,5 +1,6 @@
 import { ADEJE_URL, obtenerVerbenasAdeje } from './adeje.js';
 import { ARONA_URL, obtenerVerbenasArona } from './arona.js';
+import { ELROSARIO_URL, obtenerVerbenasElRosario } from './elrosario.js';
 import { GRANADILLA_URL, obtenerVerbenasGranadilla } from './granadilla.js';
 import { GUIADEISORA_URL, obtenerVerbenasGuiaDeIsora } from './guiadeisora.js';
 import { LAGENDA_URL, obtenerVerbenasLagenda } from './lagenda.js';
@@ -15,6 +16,7 @@ import { porFecha, type Fuente, type Verbena } from './types.js';
 export const FUENTES: Fuente[] = [
   { id: 'arona', nombre: 'Arona', agendaUrl: ARONA_URL, obtener: obtenerVerbenasArona },
   { id: 'adeje', nombre: 'Adeje', agendaUrl: ADEJE_URL, obtener: obtenerVerbenasAdeje },
+  { id: 'elrosario', nombre: 'El Rosario', agendaUrl: ELROSARIO_URL, obtener: obtenerVerbenasElRosario },
   { id: 'tegueste', nombre: 'Tegueste', agendaUrl: TEGUESTE_URL, obtener: obtenerVerbenasTegueste },
   { id: 'lalaguna', nombre: 'La Laguna', agendaUrl: LALAGUNA_URL, obtener: obtenerVerbenasLaLaguna },
   { id: 'guiadeisora', nombre: 'Guía de Isora', agendaUrl: GUIADEISORA_URL, obtener: obtenerVerbenasGuiaDeIsora },
@@ -45,7 +47,9 @@ function normLugar(v: Verbena): string {
 
 /** ¿Es `b` la misma verbena ya vista en `a`? Mismo municipio+día y
  *  (orquesta común o ≥2 palabras del título). Con lugares reales distintos
- *  se veta salvo solape fuerte (orquesta o ≥3 palabras). */
+ *  se veta salvo solape fuerte (orquesta o ≥3 palabras). Y con cartel
+ *  distinto en ambos (orquestas disjuntas no vacías) nunca se fusiona:
+ *  dos bailes pueden compartir noche y plaza. */
 function esDuplicada(a: Verbena, b: Verbena): boolean {
   if (normTxt(a.municipio) !== normTxt(b.municipio)) return false;
   if (!a.day || a.day !== b.day) return false;
@@ -55,6 +59,8 @@ function esDuplicada(a: Verbena, b: Verbena): boolean {
   const oa = toks((a.orquestas || []).join(' ')), ob = toks((b.orquestas || []).join(' '));
   let orqs = 0;
   for (const w of oa) if (ob.has(w)) orqs++;
+  const aOrq = (a.orquestas || []).length > 0, bOrq = (b.orquestas || []).length > 0;
+  if (aOrq && bOrq && orqs === 0 && comunes < 3) return false;
   const la = normLugar(a), lb = normLugar(b);
   if (la && lb && la !== lb && !(orqs >= 1 || comunes >= 3)) return false;
   return orqs >= 1 || comunes >= 2;

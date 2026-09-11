@@ -1,10 +1,10 @@
 import * as cheerio from 'cheerio';
 import {
   clasificarDetalle,
+  lugarCercano,
   mesANum,
   partirPorDias,
   extraerSubEventos,
-  posEn,
   tipoDeEvento
 } from './classifier.js';
 import { fetchText } from './http.js';
@@ -54,16 +54,10 @@ function ventana(sec: string, titulo: string, radio = 600): string {
   if (idx === -1) return sec.slice(0, 1200);
   return sec.slice(Math.max(0, idx - radio), idx + titulo.length + radio);
 }
-/** Lugar más cercano ANTES del título: gana la ÚLTIMA mención de la ventana. */
-function lugarCercano(seccion: string, titulo: string): string {
-  const idx = posEn(seccion, titulo);
-  const prev = idx === -1 ? seccion.slice(0, 600) : seccion.slice(Math.max(0, idx - 400), idx);
-  const re = /(Plaza del Cristo|Plaza de [^.\n,]{2,40}|Cancha [^.\n,]{2,30}|Teatro [^.\n,]{2,30}|Casco [^.\n,]{2,20})/gi;
-  let m: RegExpExecArray | null;
-  let ultimo = '';
-  while ((m = re.exec(prev)) !== null) ultimo = m[1].trim();
-  return ultimo || 'La Laguna';
-}
+/** Lugar más cercano ANTES del título: helper compartido de classifier.ts
+ *  (con filtros anti-rutas y anti-saltos de línea); si no hay recinto, La Laguna. */
+const lugarLaLaguna = (sec: string, titulo: string): string =>
+  lugarCercano(sec, titulo) || 'La Laguna';
 
 export async function obtenerVerbenasLaLaguna(): Promise<Verbena[]> {
   if (cache && Date.now() - cache.at < TTL) return cache.data;
@@ -93,7 +87,7 @@ export async function obtenerVerbenasLaLaguna(): Promise<Verbena[]> {
       if (!mes) continue;
       const day = `${String(sec.dia).padStart(2, '0')}-${mes}-${anyo}`;
       for (const sub of extraerSubEventos(sec.texto)) {
-        const lugar = sub.lugar || lugarCercano(sec.texto, sub.titulo);
+        const lugar = sub.lugar || lugarLaLaguna(sec.texto, sub.titulo);
         const cls = clasificarDetalle(sub.titulo, ventana(sec.texto, sub.titulo), sub.hora, lugar);
         if (!cls.esVerbena) continue;
         verbenas.push({
