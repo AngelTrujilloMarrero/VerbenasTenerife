@@ -166,18 +166,26 @@ export function extraerSubEventos(programaTexto: string): SubEvento[] {
   while ((m = LINEA_BAILE.exec(programaTexto)) !== null) {
     const [, hora, tituloRaw, lugarRaw] = m;
     const titulo = tituloRaw.trim();
+    out.push({ day: '', hora, titulo, orquestas: extraerOrquestas(titulo), lugar: (lugarRaw || '').trim() });
+  }
+  return out;
+}
+
+/** Nombres de orquestas/artistas dentro de un título ("...con X, Y y Z").
+ *  Combina patrón preciso ("Orquestas X") + fallbacks con comas, sin duplicados. */
+export function extraerOrquestas(titulo: string): string[] {
     // Extrae "Orquestas X y Y" / "orquesta Los Ideales",
     // más fallback PDF: "Verbena con ... Grupo Pati, Atenia y la Orquesta Olimpia".
     // Se combinan ambos patrones sin duplicados.
     const orq: string[] = [];
     const patrones: { re: RegExp; coma: boolean }[] = [
       { re: /orquestas?\s*:?\s*([^.,;]+(?:y[^.,;]+)?)/i, coma: false },
-      // "Verbena con ... Grupo Pati, Atenia y la Orquesta Olimpia" y
+      // "Verbena con/a cargo de ... Grupo Pati, Atenia y la Orquesta Olimpia" y
       // "MEGAVERBENAZO ... con ARMONÍA SHOW ..., LEDES DÍAZ, ...".
       // Estos SÍ admiten comas (luego se parte por coma/y).
       // El genérico exige mayúscula inicial SIN /i para no tragar frases.
-      { re: /verbena\s+con\s+(?:la\s+actuaci[oó]n(?:es)?\s+de\s+|las\s+actuaciones\s+de\s+)?([^.;]{3,160})/i, coma: true },
-      { re: /\bcon\s+(?:la\s+actuaci[oó]n(?:es)?\s+de\s+|las\s+actuaciones\s+de\s+)?([A-ZÁÉÍÓÚÑ][^.;]{3,160})/, coma: true }
+      { re: /verbena\s+(?:con|a\s+cargo\s+de)\s+(?:la\s+actuaci[oó]n(?:es)?\s+de\s+|las\s+actuaciones\s+de\s+)?([^.;]{3,160})/i, coma: true },
+      { re: /\bcon\s+(?:las?\s+|los\s+)?(?:la\s+actuaci[oó]n(?:es)?\s+de\s+|las\s+actuaciones\s+de\s+)?(?:orquestas?\s*:?\s*)?([A-ZÁÉÍÓÚÑ][^.;]{3,160})/, coma: true }
     ];
     const limpia = (s: string): string => {
       // Fuera paréntesis ("(taller de salsa...)", "(tributo a ...)") y comillas
@@ -200,7 +208,6 @@ export function extraerSubEventos(programaTexto: string): SubEvento[] {
       const n = limpia(raw);
       if (n.length < 3 || ES_ADMIN.test(n)) return;
       if (!musicCtx && ES_LUGAR.test(n)) return;
-      if (ES_LUGAR.test(n) && !/orquesta|grupo|parranda|tributo/i.test(n)) return;
       const dup = orq.some((o) => {
         const a = o.toLowerCase(), b = n.toLowerCase();
         return a === b || a.includes(b) || b.includes(a);
@@ -216,7 +223,27 @@ export function extraerSubEventos(programaTexto: string): SubEvento[] {
       // Sin comas en la captura (patrón preciso): partir solo por "y".
       base.split(coma ? /\s+y\s+|\s*,\s*/ : /\s+y\s+/).forEach(add);
     }
-    out.push({ day: '', hora, titulo, orquestas: orq, lugar: (lugarRaw || '').trim() });
+    return orq;
+}
+
+// Bailes sin hora ("...y a su finalización una verbena a cargo de Grupo La Calle"):
+// solo valen con música explícita (orquesta/grupo/banda/dj...) en la línea.
+const TIENE_MUSICA = /orquesta|grupo|banda|dj|parranda|\bson\b|tributo|latin|band\b/i;
+const LINEA_SIN_HORA = /(gran baile|verbena)\b([^.\n]{4,180}?)(?=[.]|$)/gi;
+
+export interface BaileSinHora {
+  titulo: string;
+  orquestas: string[];
+}
+
+export function extraerBailesSinHora(texto: string): BaileSinHora[] {
+  const out: BaileSinHora[] = [];
+  let m: RegExpExecArray | null;
+  LINEA_SIN_HORA.lastIndex = 0;
+  while ((m = LINEA_SIN_HORA.exec(texto)) !== null) {
+    const titulo = (m[1] + ' ' + m[2]).trim().replace(/\s+/g, ' ');
+    if (!TIENE_MUSICA.test(titulo)) continue;
+    out.push({ titulo, orquestas: extraerOrquestas(titulo) });
   }
   return out;
 }
@@ -249,7 +276,12 @@ export interface SeccionDia {
   texto: string;
 }
 
-const HEADER_DIA = /(viernes|s[aá]bado|domingo|lunes|martes|mi[eé]rcoles|jueves)\s+(\d{1,2})\s+de\s+([a-záéíóúñ]+)/gi;
+const HEADER_DIA = /(viernes|s[aá]bado|domingo|lunes|martes|mi[eé]rcoles|jueves)\s*,?\s*(\d{1,2})(?:\s+de\s+([a-záéíóúñ]+))?/gi;
+// "...hasta el 24 de septiembre" (sin día de semana, con mes obligatorio;
+// \bel\b no traga "del" ni "al ... de").
+// NO parte si es un plazo ("hasta el 10 de septiembre", "inscripción antes del...").
+const DIA_EL_MES = /\bel\s+(\d{1,2})\s+de\s+([a-záéíóúñ]+)/gi;
+const NO_ES_DIA = /(hasta|antes\s+del?|desde\s+el|plazo|inscripci[oó]n|cierra?|cierre)\s*$/i;
 
 export function partirPorDias(programa: string): SeccionDia[] {
   const out: SeccionDia[] = [];
@@ -257,8 +289,18 @@ export function partirPorDias(programa: string): SeccionDia[] {
   let m: RegExpExecArray | null;
   HEADER_DIA.lastIndex = 0;
   while ((m = HEADER_DIA.exec(programa)) !== null) {
-    headers.push({ dia: parseInt(m[2], 10), mes: m[3], index: m.index });
+    headers.push({ dia: parseInt(m[2], 10), mes: m[3] || '', index: m.index });
   }
+  DIA_EL_MES.lastIndex = 0;
+  while ((m = DIA_EL_MES.exec(programa)) !== null) {
+    // Evita duplicar un encabezado ya capturado en la misma posición
+    if (headers.some((h) => Math.abs(h.index - m.index) < 12)) continue;
+    // Evita partir por plazos ("...inscripción (hasta el 10 de septiembre)")
+    const previo = programa.slice(Math.max(0, m.index - 28), m.index);
+    if (NO_ES_DIA.test(previo)) continue;
+    headers.push({ dia: parseInt(m[1], 10), mes: m[2], index: m.index });
+  }
+  headers.sort((a, b) => a.index - b.index);
   headers.forEach((h, i) => {
     const fin = i + 1 < headers.length ? headers[i + 1].index : programa.length;
     out.push({ dia: h.dia, mes: h.mes, texto: programa.slice(h.index, fin) });

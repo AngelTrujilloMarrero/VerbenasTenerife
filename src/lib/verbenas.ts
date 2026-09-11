@@ -1,5 +1,6 @@
 import { ADEJE_URL, obtenerVerbenasAdeje } from './adeje.js';
 import { ARONA_URL, obtenerVerbenasArona } from './arona.js';
+import { GRANADILLA_URL, obtenerVerbenasGranadilla } from './granadilla.js';
 import { GUIADEISORA_URL, obtenerVerbenasGuiaDeIsora } from './guiadeisora.js';
 import { LAGENDA_URL, obtenerVerbenasLagenda } from './lagenda.js';
 import { LALAGUNA_URL, obtenerVerbenasLaLaguna } from './lalaguna.js';
@@ -16,6 +17,7 @@ export const FUENTES: Fuente[] = [
   { id: 'tegueste', nombre: 'Tegueste', agendaUrl: TEGUESTE_URL, obtener: obtenerVerbenasTegueste },
   { id: 'lalaguna', nombre: 'La Laguna', agendaUrl: LALAGUNA_URL, obtener: obtenerVerbenasLaLaguna },
   { id: 'guiadeisora', nombre: 'Guía de Isora', agendaUrl: GUIADEISORA_URL, obtener: obtenerVerbenasGuiaDeIsora },
+  { id: 'granadilla', nombre: 'Granadilla de Abona', agendaUrl: GRANADILLA_URL, obtener: obtenerVerbenasGranadilla },
   { id: 'lagenda', nombre: 'Lagenda', agendaUrl: LAGENDA_URL, obtener: obtenerVerbenasLagenda }
 ];
 

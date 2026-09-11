@@ -107,7 +107,6 @@ const fuentes = (filtro
     <div class="badges">
       <span class="badge-update">🕐 ACTUALIZADO: <span id="badge-hoy">…</span></span>
       <span class="badge-fuente" id="badge-fuentes">⏳ conectando…</span>
-      <a class="badge-fuente" id="badge-json" href="/api/verbenas.json" style="text-decoration:none">ver JSON</a>
     </div>
   </header>
 
@@ -169,7 +168,6 @@ const fuentes = (filtro
     const fActual = params.get('municipio');
     $('nav-muni').innerHTML = `<a href="/" class="${!fActual ? 'activo' : ''}">Todas</a>` +
       fuentes.map((f) => `<a href="/?municipio=${f.id}" class="${fActual === f.id ? 'activo' : ''}">${esc(f.nombre)}</a>`).join('');
-    $('badge-json').href = fActual ? `/api/verbenas.json?municipio=${fActual}` : '/api/verbenas.json';
 
     fuentes.forEach((f) => {
       const el = document.createElement('span');

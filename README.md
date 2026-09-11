@@ -28,8 +28,10 @@ de los ayuntamientos (caché 1h por adaptador) y filtra verbenas con patrones.
   los archives estáticos de DeBelingo). Mencionar una suma +5. Purgados
   topónimos y genéricos ("Tenerife", "Calle", "Sergio"...) para no crear FPs.
 
-Estado: 32 eventos (15 de ayuntamientos + 21 de lagenda − 4 duplicados que
-gana la fuente oficial; 25 futuras). 8 municipios.
+Estado: 34 eventos en 9 municipios (Granadilla 8 = 2 del ayuntamiento + 7 de
+lagenda − 1 duplicado; 25 futuras). Granadilla usa TEC REST
+(`/wp-json/tribe/events/v1/events`, patrón para cualquier WP con ese plugin)
++ noticias de fiestas (El Médano: verbena 19-09 y gran baile 20-09).
 - lagenda.org (`src/lib/lagenda.ts`): índice planfinde + programas con días y
   horas ("23:00 - Gran Baile..."). Respeto a robots (pausa entre detalles),
   prioriza fechas próximas, resuelve municipio (`municipios.ts`) y deduplica.
