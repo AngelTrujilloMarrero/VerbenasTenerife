@@ -4,6 +4,7 @@ import {
   clasificarTitulo,
   esContenedor,
   extraerSubEventos,
+  lugarCercano,
   mesANum,
   partirPorDias,
   tipoDeEvento,
@@ -124,7 +125,8 @@ export async function obtenerVerbenasLagenda(): Promise<Verbena[]> {
             day,
             hora: sub.hora,
             municipio,
-            lugar: sub.lugar || municipio,
+            // Recinto del programa > núcleo del índice > municipio
+            lugar: sub.lugar || lugarCercano(sec.texto, sub.titulo) || it.lugarTexto || municipio,
             orquestas: sub.orquestas,
             tipo: tipoDeEvento(sub.titulo),
             url: it.url,

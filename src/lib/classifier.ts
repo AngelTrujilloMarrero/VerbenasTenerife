@@ -318,6 +318,28 @@ export function ventana(texto: string, titulo: string, radio = 600): string {
   return texto.slice(Math.max(0, idx - radio), idx + titulo.length + radio);
 }
 
+// Recintos con nombre propio ("Plaza de San Marcos", "Cancha El Lomo").
+// Sin "Calle" a secas: suele ser callejero ("Calle Tordo"), no recinto.
+// [ \t] y no \s: un salto de línea NO puede formar parte del nombre.
+const RE_LUGAR = /(Plaza[ \t]+(?:de[ \t]+|del[ \t]+)?[^.\n,]{2,40}|Parque[ \t]+[^.\n,]{2,40}|Cancha[ \t]+[^.\n,]{2,40}|Recinto[ \t]+[^.\n,]{2,40}|Auditorio[ \t]+[^.\n,]{2,40}|Teatro[ \t]+[^.\n,]{2,40}|Pabell[oó]n[ \t]+[^.\n,]{2,40}|Polideportivo[ \t]+[^.\n,]{2,40}|Mercado[ \t]+[^.\n,]{2,40}|Iglesia[ \t]+[^.\n,]{2,40}|Ermita[ \t]+[^.\n,]{2,40})/gi;
+
+// Rutas, no recintos ("procesión desde la iglesia hasta el muelle").
+const RE_LUGAR_MALO = /\b(hasta|desde|hacia|recorrido|trayecto|salida|llegada|acompa\w*|itinerario|recorrido)\b/i;
+
+/** Último recinto válido mencionado antes del título (el más cercano a la línea). */
+export function lugarCercano(seccion: string, titulo: string, radio = 400): string {
+  const idx = posEn(seccion, titulo);
+  const prev = idx === -1 ? seccion.slice(0, 600) : seccion.slice(Math.max(0, idx - radio), idx);
+  let m: RegExpExecArray | null;
+  let ultimo = '';
+  RE_LUGAR.lastIndex = 0;
+  while ((m = RE_LUGAR.exec(prev)) !== null) {
+    const cand = m[1].trim();
+    if (!RE_LUGAR_MALO.test(cand)) ultimo = cand;
+  }
+  return ultimo;
+}
+
 // Programas multi-día ("Viernes 11 de septiembre ... Sábado 12 ..."):
 // parte el texto por encabezado de día para heredar la fecha en cada baile.
 // Pensado para escalar a los 31 aytos (Arona migrará a esto y jubilará su parche).
