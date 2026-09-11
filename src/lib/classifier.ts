@@ -10,16 +10,40 @@ export interface ScoredEvent {
   esVerbena: boolean;
 }
 
-const TITULO_POS = /\b(baile|gran baile|verbena|noche latina|noche boricua|baile de magos|romer[ií]a|orquesta|tributo|studio 54)\b/i;
+const TITULO_POS = /\b(baile|gran baile|verbena|verbenazo|megaverbena|tardeo|noche latina|noche boricua|baile de magos|romer[ií]a|orquesta|tributo|studio 54)\b/i;
 const DESC_POS = /amenizado por|amenizan|orquestas?\s*:|orquestas?\s+[A-ZÁÉÍÓÚÑ]|gran baile|noche latina/i;
 const HORA_NOCTURNA = /(2[0-3]|21):\d{2}/;
 
 const ANTI_PATRON = /\b(beb[ée]cuento|exposici[óo]n|teatro|cuentos?|taller|flamenco.*poes[íi]a|misa|rosario|procesi[óo]n|rezo|bono comercio|filos[óo]fico|cuenta-?cuentos?)\b/i;
 
-const ORQUESTAS_CONOCIDAS = [
+// Filtro histórico: 167 orquestas con >=2 actuaciones en 2024-25,
+// generadas con scripts/extraer-orquestas.mjs desde los archives de DeBelingo.
+import HIST from './data/orquestas.json';
+const ORQ_HIST: { nombre: string; n: number }[] = (HIST as { orquestas: { nombre: string; n: number }[] }).orquestas;
+
+const normHay = (s: string): string =>
+  ' ' + s.toLowerCase().replace(/[.,;:()"'“”‘’¡!¿?]/g, ' ').replace(/\s+/g, ' ') + ' ';
+
+/** ¿Menciona el texto alguna orquesta histórica? Devuelve "nombre (n)". */
+function historicoEn(texto: string): string | null {
+  const hay = normHay(texto);
+  for (const { nombre, n } of ORQ_HIST) {
+    const low = nombre.toLowerCase();
+    // Nombre compuesto: inclusión directa; token único: con bordes.
+    if (low.includes(' ') ? hay.includes(low) : hay.includes(' ' + low + ' ')) {
+      return `${nombre} (${n})`;
+    }
+  }
+  return null;
+}
+
+const ORQUESTAS_MANO = [
+  'ruta salsera', 'toque latino', 'amanecer', 'shaila', 'falete',
   'wamampy', 'sabrosa', 'sensaci', 'caracas', 'tropin', 'malib',
-  'ideales', 'maquinaria', 'ruta salsera', 'frankie ruiz', 'shaila',
-  'falete', 'tributo'
+  'ideales', 'maquinaria', 'frankie ruiz'
+  // OJO: no meter genéricos tipo "tributo" (falso positivo en
+  // "tributo a la película ENCANTO"); el contexto "Orquesta: Tributo" ya puntúa.
+  // Ni "calle"/"plaza" sueltos (falsos positivos con callejero).
 ];
 
 export function clasificarTitulo(titulo: string, fechaLista = ''): ScoredEvent {
@@ -30,16 +54,28 @@ export function clasificarTitulo(titulo: string, fechaLista = ''): ScoredEvent {
     score += 3;
     motivos.push(`título match: ${titulo.match(TITULO_POS)?.[0]}`);
   }
+  // Una verbena real nunca es infantil/familiar: evita que "Feria infantil
+  // con música, baile y..." cuele por la palabra baile.
+  if (/\binfantil\b|\bfamiliar\b|beb[ée]cuento|hinchables?/i.test(titulo)) {
+    score -= 4;
+    motivos.push('penalización infantil/familiar');
+  }
   if (ANTI_PATRON.test(titulo)) {
     score -= 5;
     motivos.push(`anti-patrón título: ${titulo.match(ANTI_PATRON)?.[0]}`);
   }
   const t = titulo.toLowerCase();
-  for (const o of ORQUESTAS_CONOCIDAS) {
-    if (t.includes(o)) {
-      score += 5;
-      motivos.push(`orquesta conocida en título: ${o}`);
-      break;
+  const hist = historicoEn(titulo);
+  if (hist) {
+    score += 5;
+    motivos.push(`orquesta histórica 2024-25 en título: ${hist}`);
+  } else {
+    for (const o of ORQUESTAS_MANO) {
+      if (t.includes(o)) {
+        score += 5;
+        motivos.push(`orquesta conocida en título: ${o}`);
+        break;
+      }
     }
   }
   return { titulo, url: '', fechaLista, score, motivos, esVerbena: score >= 4 };
@@ -62,14 +98,26 @@ export function clasificarDetalle(titulo: string, descripcion: string, hora = ''
     }
   }
   const descLow = descripcion.toLowerCase();
-  for (const o of ORQUESTAS_CONOCIDAS) {
-    if (descLow.includes(o) && !motivos.some((m) => m.includes(o))) {
-      score += 5;
-      motivos.push(`orquesta conocida en detalle: ${o}`);
-      break;
+  const histD = historicoEn(descripcion);
+  if (histD && !motivos.some((m) => m.includes(histD.split(' (')[0]))) {
+    score += 5;
+    motivos.push(`orquesta histórica 2024-25 en detalle: ${histD}`);
+  } else {
+    for (const o of ORQUESTAS_MANO) {
+      if (descLow.includes(o) && !motivos.some((m) => m.includes(o))) {
+        score += 5;
+        motivos.push(`orquesta conocida en detalle: ${o}`);
+        break;
+      }
     }
   }
-  if (HORA_NOCTURNA.test(hora) || HORA_NOCTURNA.test(descripcion.slice(0, 2000))) {
+  // La hora nocturna SOLO vale la del propio acto: mirar en el texto vecino
+  // cuela el 21:00 de otro evento (caso Feria Infantil + Noche de Humor).
+  // Sin hora propia se admite el texto cercano como último recurso.
+  const horaNocturna = hora
+    ? HORA_NOCTURNA.test(hora)
+    : HORA_NOCTURNA.test(descripcion.slice(0, 500));
+  if (horaNocturna) {
     score += 1;
     motivos.push('hora nocturna 20-23h');
   }
@@ -91,7 +139,14 @@ export interface SubEvento {
   lugar: string;
 }
 
-const LINEA_BAILE = /(\d{1,2}:\d{2})\s*(?:horas?|h)\b\s*\.?:?\s*[–-]?\s*([^.\n]*?(?:gran baile|baile|verbena|noche latina|noche boricua)[^.\n]*)\.?\s*(?:lugar:\s*([^.\n]+))?/gi;
+// Admite prefijo de lugar ("A las 16:00 horas En la Plaza del Cristo. TARDEO...")
+// acotado a 1-3 palabras con mayúscula inicial para no comerse el título.
+const LUGAR_PREVIO = String.raw`(?:en\s+la\s+(?:plaza|parque|cancha|calle|teatro|recinto|casa|auditorio)(?:\s+(?:del?|de\s+la))?(?:\s+[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+){1,3}\s*\.?\s*)?`;
+const LINEA_BAILE = new RegExp(
+  String.raw`(\d{1,2}:\d{2})\s*(?:horas?|h)\b\s*\.?:?\s*` + LUGAR_PREVIO +
+  String.raw`[–-]?\s*([^.\n]*?(?:gran baile|baile|verbena|verbenazo|tardeo|noche latina|noche boricua)[^.\n]*)\.?\s*(?:lugar:\s*([^.\n]+))?`,
+  'gi'
+);
 
 export function extraerSubEventos(programaTexto: string): SubEvento[] {
   const out: SubEvento[] = [];
@@ -105,9 +160,14 @@ export function extraerSubEventos(programaTexto: string): SubEvento[] {
     // más fallback PDF: "Verbena con ... Grupo Pati, Atenia y la Orquesta Olimpia".
     // Se combinan ambos patrones sin duplicados.
     const orq: string[] = [];
-    const patrones = [
-      /orquestas?\s*:?\s*([^.,;]+(?:y[^.,;]+)?)/i,
-      /verbena\s+con\s+(?:la\s+actuaci[oó]n\s+de\s+|las\s+actuaciones\s+de\s+)?([^.,;]{3,120})/i
+    const patrones: { re: RegExp; coma: boolean }[] = [
+      { re: /orquestas?\s*:?\s*([^.,;]+(?:y[^.,;]+)?)/i, coma: false },
+      // "Verbena con ... Grupo Pati, Atenia y la Orquesta Olimpia" y
+      // "MEGAVERBENAZO ... con ARMONÍA SHOW ..., LEDES DÍAZ, ...".
+      // Estos SÍ admiten comas (luego se parte por coma/y).
+      // El genérico exige mayúscula inicial SIN /i para no tragar frases.
+      { re: /verbena\s+con\s+(?:la\s+actuaci[oó]n(?:es)?\s+de\s+|las\s+actuaciones\s+de\s+)?([^.;]{3,160})/i, coma: true },
+      { re: /\bcon\s+(?:la\s+actuaci[oó]n(?:es)?\s+de\s+|las\s+actuaciones\s+de\s+)?([A-ZÁÉÍÓÚÑ][^.;]{3,160})/, coma: true }
     ];
     const limpia = (s: string): string => {
       let n = s.trim();
@@ -127,10 +187,11 @@ export function extraerSubEventos(programaTexto: string): SubEvento[] {
       });
       if (!dup) orq.push(n);
     };
-    for (const re of patrones) {
+    for (const { re, coma } of patrones) {
       const mo = titulo.match(re);
       if (!mo) continue;
-      mo[1].split(/\s+y\s+|\s*,\s*/).forEach(add);
+      // Sin comas en la captura (patrón preciso): partir solo por "y".
+      mo[1].split(coma ? /\s+y\s+|\s*,\s*/ : /\s+y\s+/).forEach(add);
     }
     out.push({ day: '', hora, titulo, orquestas: orq, lugar: (lugarRaw || '').trim() });
   }
@@ -183,8 +244,9 @@ export function esContenedor(titulo: string): boolean {
 export function tipoDeEvento(titulo: string): string {
   if (/baile de magos/i.test(titulo)) return 'Baile Magos';
   if (/romer[ií]a/i.test(titulo)) return 'Romería';
+  if (/inclusiva/i.test(titulo)) return 'Inclusiva';
   if (/noche latina|noche boricua|tributo|studio 54|concierto|festival/i.test(titulo)) return 'Concierto';
-  if (/baile/i.test(titulo)) return 'Baile Normal';
+  if (/baile|tardeo|verbena|verbenazo/i.test(titulo)) return 'Baile Normal';
   if (/fiestas mayores|fiestas de/i.test(titulo)) return 'Fiestas';
   return 'Otro';
 }

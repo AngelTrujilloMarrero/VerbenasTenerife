@@ -1,0 +1,582 @@
+{
+ "generado": "2026-09-11",
+ "total": 144,
+ "orquestas": [
+  {
+   "nombre": "Sabrosa",
+   "n": 81
+  },
+  {
+   "nombre": "Pepe Benavente",
+   "n": 76
+  },
+  {
+   "nombre": "Wamampy",
+   "n": 68
+  },
+  {
+   "nombre": "Generación Zero",
+   "n": 65
+  },
+  {
+   "nombre": "David Pérez",
+   "n": 50
+  },
+  {
+   "nombre": "Nueva Linea",
+   "n": 50
+  },
+  {
+   "nombre": "Kimbara",
+   "n": 48
+  },
+  {
+   "nombre": "Malibú Band",
+   "n": 46
+  },
+  {
+   "nombre": "Fernandito",
+   "n": 45
+  },
+  {
+   "nombre": "Maquinaria Band",
+   "n": 44
+  },
+  {
+   "nombre": "Tropin",
+   "n": 44
+  },
+  {
+   "nombre": "Acapulco",
+   "n": 43
+  },
+  {
+   "nombre": "Guaracha",
+   "n": 39
+  },
+  {
+   "nombre": "Pasión Gomera",
+   "n": 37
+  },
+  {
+   "nombre": "Saoco",
+   "n": 37
+  },
+  {
+   "nombre": "Arguayo Band",
+   "n": 35
+  },
+  {
+   "nombre": "Clase Aparte",
+   "n": 35
+  },
+  {
+   "nombre": "KDTS",
+   "n": 31
+  },
+  {
+   "nombre": "Paraiso",
+   "n": 31
+  },
+  {
+   "nombre": "Sensación Gomera",
+   "n": 31
+  },
+  {
+   "nombre": "Toke Latino",
+   "n": 30
+  },
+  {
+   "nombre": "Ideales",
+   "n": 29
+  },
+  {
+   "nombre": "Sonora Olympia",
+   "n": 29
+  },
+  {
+   "nombre": "Atenia",
+   "n": 28
+  },
+  {
+   "nombre": "Primera Marcha",
+   "n": 27
+  },
+  {
+   "nombre": "Swing Latino",
+   "n": 25
+  },
+  {
+   "nombre": "Corinto Band",
+   "n": 24
+  },
+  {
+   "nombre": "Dorada Band",
+   "n": 24
+  },
+  {
+   "nombre": "Generasión",
+   "n": 22
+  },
+  {
+   "nombre": "Armonía Latina",
+   "n": 21
+  },
+  {
+   "nombre": "Manuel Dorta",
+   "n": 21
+  },
+  {
+   "nombre": "Banda Loca",
+   "n": 20
+  },
+  {
+   "nombre": "Columbia",
+   "n": 20
+  },
+  {
+   "nombre": "Nueva Ilusión",
+   "n": 20
+  },
+  {
+   "nombre": "Atlantic",
+   "n": 19
+  },
+  {
+   "nombre": "Grupo Guaydil",
+   "n": 19
+  },
+  {
+   "nombre": "Latin Sound",
+   "n": 19
+  },
+  {
+   "nombre": "Morocho",
+   "n": 19
+  },
+  {
+   "nombre": "Teide Swing",
+   "n": 19
+  },
+  {
+   "nombre": "Gomeray",
+   "n": 18
+  },
+  {
+   "nombre": "Maraury",
+   "n": 18
+  },
+  {
+   "nombre": "Dinacord",
+   "n": 17
+  },
+  {
+   "nombre": "Son Sin Límite",
+   "n": 17
+  },
+  {
+   "nombre": "Macacos",
+   "n": 16
+  },
+  {
+   "nombre": "Maikel Jiménez",
+   "n": 16
+  },
+  {
+   "nombre": "Manavy Band",
+   "n": 15
+  },
+  {
+   "nombre": "The Boys Machine",
+   "n": 15
+  },
+  {
+   "nombre": "Dany García",
+   "n": 14
+  },
+  {
+   "nombre": "Maracaibo",
+   "n": 14
+  },
+  {
+   "nombre": "Marco Pachanga",
+   "n": 13
+  },
+  {
+   "nombre": "Renzzo",
+   "n": 13
+  },
+  {
+   "nombre": "Samady Band",
+   "n": 13
+  },
+  {
+   "nombre": "Aparranda2",
+   "n": 12
+  },
+  {
+   "nombre": "Grupo Pa Ti",
+   "n": 12
+  },
+  {
+   "nombre": "Son Canarias",
+   "n": 12
+  },
+  {
+   "nombre": "Teymar",
+   "n": 11
+  },
+  {
+   "nombre": "Xany Recco",
+   "n": 11
+  },
+  {
+   "nombre": "Yo Marc",
+   "n": 11
+  },
+  {
+   "nombre": "Amanecer",
+   "n": 10
+  },
+  {
+   "nombre": "Fórmula Latina",
+   "n": 10
+  },
+  {
+   "nombre": "Luis Deseda",
+   "n": 10
+  },
+  {
+   "nombre": "Ni 1 Pelo De Tonto",
+   "n": 10
+  },
+  {
+   "nombre": "Victor Déniz",
+   "n": 10
+  },
+  {
+   "nombre": "Proyecto Joven",
+   "n": 9
+  },
+  {
+   "nombre": "Sabrosa (Tributo Juan Luis Guerra",
+   "n": 9
+  },
+  {
+   "nombre": "Seisd6",
+   "n": 9
+  },
+  {
+   "nombre": "Una Hora Menos",
+   "n": 9
+  },
+  {
+   "nombre": "Jose Zalba",
+   "n": 8
+  },
+  {
+   "nombre": "Suso Expósito",
+   "n": 8
+  },
+  {
+   "nombre": "Vándalos",
+   "n": 8
+  },
+  {
+   "nombre": "Volcánicos",
+   "n": 8
+  },
+  {
+   "nombre": "Combo Dominicano",
+   "n": 7
+  },
+  {
+   "nombre": "Nuevo Sabor",
+   "n": 7
+  },
+  {
+   "nombre": "Aminadad Rodríguez",
+   "n": 6
+  },
+  {
+   "nombre": "Grupo Bomba",
+   "n": 6
+  },
+  {
+   "nombre": "Kandela",
+   "n": 6
+  },
+  {
+   "nombre": "Quimbao La Nuit",
+   "n": 6
+  },
+  {
+   "nombre": "Son Sabor",
+   "n": 6
+  },
+  {
+   "nombre": "Bembé",
+   "n": 5
+  },
+  {
+   "nombre": "Elicio",
+   "n": 5
+  },
+  {
+   "nombre": "Guarapo",
+   "n": 5
+  },
+  {
+   "nombre": "Nueva Latina",
+   "n": 5
+  },
+  {
+   "nombre": "Tímbara",
+   "n": 5
+  },
+  {
+   "nombre": "Arodi Llanos",
+   "n": 4
+  },
+  {
+   "nombre": "Fernando Martín",
+   "n": 4
+  },
+  {
+   "nombre": "Mencey Band",
+   "n": 4
+  },
+  {
+   "nombre": "Pedro Izquierdo",
+   "n": 4
+  },
+  {
+   "nombre": "Santi Pérez",
+   "n": 4
+  },
+  {
+   "nombre": "Sergio Tejera (Tributo Frankie Ruíz",
+   "n": 4
+  },
+  {
+   "nombre": "Virginia Guantanamera",
+   "n": 4
+  },
+  {
+   "nombre": "Alex Guzmán",
+   "n": 3
+  },
+  {
+   "nombre": "Andrea Rodríguez",
+   "n": 3
+  },
+  {
+   "nombre": "Armonía Show",
+   "n": 3
+  },
+  {
+   "nombre": "Arturo Castillo",
+   "n": 3
+  },
+  {
+   "nombre": "Calipson",
+   "n": 3
+  },
+  {
+   "nombre": "Chalana",
+   "n": 3
+  },
+  {
+   "nombre": "Clave De Son",
+   "n": 3
+  },
+  {
+   "nombre": "Clave Pachanga",
+   "n": 3
+  },
+  {
+   "nombre": "Comandates Del Merengue",
+   "n": 3
+  },
+  {
+   "nombre": "Edwin Rivera",
+   "n": 3
+  },
+  {
+   "nombre": "Edwin Rivera (Sabrosa",
+   "n": 3
+  },
+  {
+   "nombre": "Efraín Martín",
+   "n": 3
+  },
+  {
+   "nombre": "José Teymar",
+   "n": 3
+  },
+  {
+   "nombre": "Juan Pedro Falcón",
+   "n": 3
+  },
+  {
+   "nombre": "La Verga",
+   "n": 3
+  },
+  {
+   "nombre": "Maxim",
+   "n": 3
+  },
+  {
+   "nombre": "Monterrojo",
+   "n": 3
+  },
+  {
+   "nombre": "Panorama Latino",
+   "n": 3
+  },
+  {
+   "nombre": "Sergio Aranda",
+   "n": 3
+  },
+  {
+   "nombre": "Tentación Gomera",
+   "n": 3
+  },
+  {
+   "nombre": "Tonny Tun Tun",
+   "n": 3
+  },
+  {
+   "nombre": "Troveros De Asieta",
+   "n": 3
+  },
+  {
+   "nombre": "101 Brass Band",
+   "n": 2
+  },
+  {
+   "nombre": "Al Sur",
+   "n": 2
+  },
+  {
+   "nombre": "Daniel Fumero",
+   "n": 2
+  },
+  {
+   "nombre": "Dúo La Klave",
+   "n": 2
+  },
+  {
+   "nombre": "El Charro",
+   "n": 2
+  },
+  {
+   "nombre": "El Flecha",
+   "n": 2
+  },
+  {
+   "nombre": "Enrique Barrios",
+   "n": 2
+  },
+  {
+   "nombre": "Escuela De Calor",
+   "n": 2
+  },
+  {
+   "nombre": "Fascinación Latina",
+   "n": 2
+  },
+  {
+   "nombre": "Fórmula Joven",
+   "n": 2
+  },
+  {
+   "nombre": "Iván Cacú",
+   "n": 2
+  },
+  {
+   "nombre": "Johnny Maquinaria",
+   "n": 2
+  },
+  {
+   "nombre": "Joseph Fonseca (Sabrosa",
+   "n": 2
+  },
+  {
+   "nombre": "Luna Llena",
+   "n": 2
+  },
+  {
+   "nombre": "Mekánica",
+   "n": 2
+  },
+  {
+   "nombre": "Miss Music Band",
+   "n": 2
+  },
+  {
+   "nombre": "Morisca",
+   "n": 2
+  },
+  {
+   "nombre": "Naomi Vega",
+   "n": 2
+  },
+  {
+   "nombre": "Parranda El Golpito",
+   "n": 2
+  },
+  {
+   "nombre": "Resistencia Latina",
+   "n": 2
+  },
+  {
+   "nombre": "Ruddy Swing",
+   "n": 2
+  },
+  {
+   "nombre": "Salsa Del Trópico",
+   "n": 2
+  },
+  {
+   "nombre": "Sonia Gil",
+   "n": 2
+  },
+  {
+   "nombre": "St Pedro",
+   "n": 2
+  },
+  {
+   "nombre": "Swing Na Ma",
+   "n": 2
+  },
+  {
+   "nombre": "Tony Del Cielo",
+   "n": 2
+  },
+  {
+   "nombre": "Toño El Bahía",
+   "n": 2
+  },
+  {
+   "nombre": "Toño Morín",
+   "n": 2
+  },
+  {
+   "nombre": "Tributo A Frankie Ruiz",
+   "n": 2
+  },
+  {
+   "nombre": "Venezuela Sweet",
+   "n": 2
+  },
+  {
+   "nombre": "Victoria Escudero",
+   "n": 2
+  },
+  {
+   "nombre": "Vid Band",
+   "n": 2
+  }
+ ]
+}

@@ -1,4 +1,4 @@
-# VerbenasTenerife (piloto: Arona + Adeje + Tegueste)
+# VerbenasTenerife (piloto: Arona + Adeje + Tegueste + La Laguna)
 
 Astro 7 SSR + scrapers en vivo. Sin BD todavía: cada visita lee las agendas
 de los ayuntamientos (caché 1h por adaptador) y filtra verbenas con patrones.
@@ -19,8 +19,11 @@ de los ayuntamientos (caché 1h por adaptador) y filtra verbenas con patrones.
 - Filtro: título con baile/verbena/orquesta, `amenizado por`, diccionario de
   orquestas, hora 20-23h, lugar plaza/parque. Descarte: misa, teatro, expo, cuentos.
   Títulos tipo "Fiestas de X" entran como contenedores y se parten por días.
-- Añadir municipio = 1 adaptador + 1 línea en `FUENTES` (escala a 31).
+- Filtro histórico: `src/lib/data/orquestas.json` (144 orquestas con >=2
+  actuaciones en 2024-25, generado con `scripts/extraer-orquestas.mjs` desde
+  los archives estáticos de DeBelingo). Mencionar una suma +5. Purgados
+  topónimos y genéricos ("Tenerife", "Calle", "Sergio"...) para no crear FPs.
 
-Estado: 11 eventos (6 Arona + 1 Adeje + 4 Tegueste del PDF de Los Remedios;
-10 futuras + Noche Boricua ya celebrada, que estrena el listado inferior).
-Siguiente paso: 3er ayuntamiento o guardar en Firebase con el modelo `Event`.
+Estado: 15 eventos (6 Arona + 1 Adeje + 4 Tegueste + 4 La Laguna del programa
+del Cristo; 12 futuras + 3 pasadas).
+Siguiente paso: 5º ayuntamiento o guardar en Firebase con el modelo `Event`.

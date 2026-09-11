@@ -1,5 +1,6 @@
 import { ADEJE_URL, obtenerVerbenasAdeje } from './adeje.js';
 import { ARONA_URL, obtenerVerbenasArona } from './arona.js';
+import { LALAGUNA_URL, obtenerVerbenasLaLaguna } from './lalaguna.js';
 import { TEGUESTE_URL, obtenerVerbenasTegueste } from './tegueste.js';
 import { porFecha, type Fuente, type Verbena } from './types.js';
 
@@ -8,7 +9,8 @@ import { porFecha, type Fuente, type Verbena } from './types.js';
 export const FUENTES: Fuente[] = [
   { id: 'arona', nombre: 'Arona', agendaUrl: ARONA_URL, obtener: obtenerVerbenasArona },
   { id: 'adeje', nombre: 'Adeje', agendaUrl: ADEJE_URL, obtener: obtenerVerbenasAdeje },
-  { id: 'tegueste', nombre: 'Tegueste', agendaUrl: TEGUESTE_URL, obtener: obtenerVerbenasTegueste }
+  { id: 'tegueste', nombre: 'Tegueste', agendaUrl: TEGUESTE_URL, obtener: obtenerVerbenasTegueste },
+  { id: 'lalaguna', nombre: 'La Laguna', agendaUrl: LALAGUNA_URL, obtener: obtenerVerbenasLaLaguna }
 ];
 
 export type { Verbena };
