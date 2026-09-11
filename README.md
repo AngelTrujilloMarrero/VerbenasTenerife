@@ -1,4 +1,4 @@
-# VerbenasTenerife (piloto: 5 municipios)
+# VerbenasTenerife (piloto: 5 ayuntamientos + lagenda.org)
 
 Astro 7 SSR + scrapers en vivo. Sin BD todavía: cada visita lee las agendas
 de los ayuntamientos (caché 1h por adaptador) y filtra verbenas con patrones.
@@ -28,7 +28,9 @@ de los ayuntamientos (caché 1h por adaptador) y filtra verbenas con patrones.
   los archives estáticos de DeBelingo). Mencionar una suma +5. Purgados
   topónimos y genéricos ("Tenerife", "Calle", "Sergio"...) para no crear FPs.
 
-Estado: 15 eventos (6 Arona + 1 Adeje + 4 Tegueste + 4 La Laguna del programa
-del Cristo; 12 futuras + 3 pasadas). Guía de Isora: monitor activo
-(EO AJAX + noticias) pero su web no publica la verbena del 12-13/09.
-Siguiente paso: 5º ayuntamiento o guardar en Firebase con el modelo `Event`.
+Estado: 32 eventos (15 de ayuntamientos + 21 de lagenda − 4 duplicados que
+gana la fuente oficial; 25 futuras). 8 municipios.
+- lagenda.org (`src/lib/lagenda.ts`): índice planfinde + programas con días y
+  horas ("23:00 - Gran Baile..."). Respeto a robots (pausa entre detalles),
+  prioriza fechas próximas, resuelve municipio (`municipios.ts`) y deduplica.
+Siguiente paso: 6º ayuntamiento o guardar en Firebase con el modelo `Event`.

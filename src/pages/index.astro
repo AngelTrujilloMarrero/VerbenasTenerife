@@ -1,16 +1,17 @@
 ---
 export const prerender = false;
 import { FUENTES } from '../lib/verbenas.js';
-import { coordsDe } from '../lib/coords.js';
+import { COORDS } from '../lib/coords.js';
 
 // Shell instantánea estilo DeBelingo: fondo oscuro, cabecera azul→púrpura,
 // días en amarillo, tarjetas con bordes laterales por tipo.
 // Los datos llegan en vivo por municipio (barra de progreso + chips).
+// La meteo se pide por MUNICIPIO (lagenda trae muchos en una fuente).
 const filtro = Astro.url.searchParams.get('municipio') || undefined;
 const fuentes = (filtro
   ? FUENTES.filter((f) => f.id === filtro.toLowerCase())
   : FUENTES
-).map((f) => ({ id: f.id, nombre: f.nombre, ...coordsDe(f.nombre) }));
+).map((f) => ({ id: f.id, nombre: f.nombre }));
 ---
 
 <html lang="es">
@@ -129,7 +130,7 @@ const fuentes = (filtro
 
   <noscript><p style="text-align:center">Necesitas JavaScript para cargar las agendas en vivo.</p></noscript>
 
-  <script define:vars={{ fuentes }}>
+  <script define:vars={{ fuentes, coords: COORDS }}>
     // Paleta por tipo (réplica DeBelingo; Concierto/Fiestas propios)
     const TIPO = {
       'Baile Normal':  { b: '#60a5fa', g: 'rgba(96,165,250,0.15)' },
@@ -195,9 +196,12 @@ const fuentes = (filtro
       return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(addr)}&travelmode=${mode}`;
     };
 
-    // Meteo Open-Meteo (gratis, sin clave): 1 petición por municipio con el
-    // rango de sus días futuros. La AEMET vendrá cuando exista su clave en Vercel.
+    // Meteo Open-Meteo (gratis, sin clave): 1 petición por MUNICIPIO con el
+    // rango de sus días futuros (una fuente como lagenda trae muchos).
+    // La AEMET vendrá cuando exista su clave en Vercel.
     const meteo = {};
+    const normMuni = (s) => String(s || '').toLowerCase().normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, '');
     const dmyAiso = (day) => { const [d, m, y] = String(day).split('-'); return `${y}-${m}-${d}`; };
     const isoAdmy = (iso) => { const [y, m, d] = String(iso).split('-'); return `${d}-${m}-${y}`; };
     const iconoMeteo = (code) => code === 0 ? '☀' : code === 1 ? '🌤️' : code === 2 ? '⛅'
@@ -205,8 +209,25 @@ const fuentes = (filtro
       : [61, 63, 65, 80, 81, 82].includes(code) ? '🌧️' : [71, 73, 75, 77, 85, 86].includes(code) ? '🌨️'
       : [95, 96, 99].includes(code) ? '⛈️' : '🌤️';
 
-    async function cargaMeteo(f, dias) {
-      if (f.lat == null || !dias.length) return;
+    // Sin coords fijas: geocodifica una vez (Open-Meteo, gratis, sin clave).
+    const geoCache = {};
+    async function coordsPara(municipio) {
+      const c = coords[normMuni(municipio)];
+      if (c) return c;
+      if (geoCache[municipio] !== undefined) return geoCache[municipio];
+      try {
+        const r = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(municipio + ', Tenerife, España')}&count=1&language=es&format=json`);
+        const j = await r.json();
+        const g = j.results?.[0];
+        geoCache[municipio] = g ? { lat: g.latitude, lon: g.longitude } : null;
+      } catch (e) { geoCache[municipio] = null; }
+      return geoCache[municipio];
+    }
+
+    async function cargaMeteo(municipio, dias) {
+      if (!dias.length) return;
+      const c = await coordsPara(municipio);
+      if (!c) return;
       const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
       const isos = [...new Set(dias.map(dmyAiso))].filter((iso) => {
         const diff = Math.round((new Date(iso + 'T00:00:00') - hoy) / 864e5);
@@ -214,11 +235,11 @@ const fuentes = (filtro
       }).sort();
       if (!isos.length) return;
       try {
-        const url = `https://api.open-meteo.com/v1/forecast?latitude=${f.lat}&longitude=${f.lon}&daily=weathercode,temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=Atlantic%2FCanary&start_date=${isos[0]}&end_date=${isos[isos.length - 1]}`;
+        const url = `https://api.open-meteo.com/v1/forecast?latitude=${c.lat}&longitude=${c.lon}&daily=weathercode,temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=Atlantic%2FCanary&start_date=${isos[0]}&end_date=${isos[isos.length - 1]}`;
         const r = await fetch(url);
         const j = await r.json();
         (j.daily?.time || []).forEach((t, i) => {
-          meteo[`${f.id}|${isoAdmy(t)}`] = {
+          meteo[`${municipio}|${isoAdmy(t)}`] = {
             tmax: Math.round(j.daily.temperature_2m_max[i]),
             tmin: Math.round(j.daily.temperature_2m_min[i]),
             code: j.daily.weathercode[i],
@@ -229,11 +250,7 @@ const fuentes = (filtro
       } catch (e) { /* sin meteo: la tarjeta sale igual */ }
     }
 
-    const meteoDe = (v) => meteo[`${fuenteIdDe(v)}|${v.day}`];
-    const fuenteIdDe = (v) => {
-      const f = fuentes.find((x) => x.nombre === v.municipio);
-      return f ? f.id : '';
-    };
+    const meteoDe = (v) => meteo[`${v.municipio}|${v.day}`];
 
     const tarjeta = (v) => {
       const t = TIPO[v.tipo] || porDefecto;
@@ -323,7 +340,11 @@ const fuentes = (filtro
         todas.push(...(d.verbenas || []));
         chips[f.id].className = 'chip ok';
         chips[f.id].textContent = `✓ ${f.nombre} (${(d.verbenas || []).length})`;
-        cargaMeteo(f, (d.verbenas || []).filter((v) => v.futura).map((v) => v.day));
+        const porMuni = {};
+        (d.verbenas || []).filter((v) => v.futura).forEach((v) => {
+          (porMuni[v.municipio] = porMuni[v.municipio] || []).push(v.day);
+        });
+        Object.entries(porMuni).forEach(([muni, dias]) => cargaMeteo(muni, dias));
       } catch (err) {
         chips[f.id].className = 'chip error';
         chips[f.id].textContent = `✗ ${f.nombre} (falló)`;

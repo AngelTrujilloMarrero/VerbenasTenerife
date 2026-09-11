@@ -12,7 +12,7 @@ export interface ScoredEvent {
 
 const TITULO_POS = /\b(baile|gran baile|verbena|verbenazo|megaverbena|tardeo|noche latina|noche boricua|baile de magos|romer[ií]a|orquesta|tributo|studio 54)\b/i;
 const DESC_POS = /amenizado por|amenizan|orquestas?\s*:|orquestas?\s+[A-ZÁÉÍÓÚÑ]|gran baile|noche latina/i;
-const HORA_NOCTURNA = /(2[0-3]|21):\d{2}/;
+const HORA_NOCTURNA = /(19|2[0-3]|21):\d{2}/;
 
 const ANTI_PATRON = /\b(beb[ée]cuento|exposici[óo]n|teatro|cuentos?|taller|flamenco.*poes[íi]a|misa|rosario|procesi[óo]n|rezo|bono comercio|filos[óo]fico|cuenta-?cuentos?)\b/i;
 
@@ -38,7 +38,7 @@ function historicoEn(texto: string): string | null {
 }
 
 const ORQUESTAS_MANO = [
-  'ruta salsera', 'toque latino', 'amanecer', 'shaila', 'falete',
+  'ruta salsera', 'toque latino', 'toke latino', 'amanecer', 'shaila', 'falete',
   'wamampy', 'sabrosa', 'sensaci', 'caracas', 'tropin', 'malib',
   'ideales', 'maquinaria', 'frankie ruiz'
   // OJO: no meter genéricos tipo "tributo" (falso positivo en
@@ -54,11 +54,11 @@ export function clasificarTitulo(titulo: string, fechaLista = ''): ScoredEvent {
     score += 3;
     motivos.push(`título match: ${titulo.match(TITULO_POS)?.[0]}`);
   }
-  // Una verbena real nunca es infantil/familiar: evita que "Feria infantil
-  // con música, baile y..." cuele por la palabra baile.
-  if (/\binfantil\b|\bfamiliar\b|beb[ée]cuento|hinchables?/i.test(titulo)) {
+  // Una verbena real nunca es infantil/familiar/mayores: evita que "Feria infantil
+  // con música, baile y..." o "Baile de la tercera juventud" cuelen.
+  if (/\binfantil\b|\bfamiliar\b|beb[ée]cuento|hinchables?|tercera edad|tercera juventud|\bmayores\b/i.test(titulo)) {
     score -= 4;
-    motivos.push('penalización infantil/familiar');
+    motivos.push('penalización infantil/familiar/mayores');
   }
   if (ANTI_PATRON.test(titulo)) {
     score -= 5;
@@ -97,6 +97,14 @@ export function clasificarDetalle(titulo: string, descripcion: string, hora = ''
       motivos.push('descripción cultural/religiosa sin baile');
     }
   }
+  // Acto tradicional-religioso ("Baile de la Virgen y canto del Aleluya"):
+  // aunque mencione "baile", sin música (orquesta/grupo/dj/parranda/amenizado)
+  // en la línea no es verbena de orquesta.
+  if (/virgen|aleluya|eucarist[íi]a|misa del pueblo/i.test(titulo) &&
+      !/amenizado|orquesta|grupo|dj|parranda|tributo/i.test(titulo + ' ' + descripcion.slice(0, 300))) {
+    score -= 6;
+    motivos.push('penalización acto religioso-tradicional sin música');
+  }
   const descLow = descripcion.toLowerCase();
   const histD = historicoEn(descripcion);
   if (histD && !motivos.some((m) => m.includes(histD.split(' (')[0]))) {
@@ -119,7 +127,7 @@ export function clasificarDetalle(titulo: string, descripcion: string, hora = ''
     : HORA_NOCTURNA.test(descripcion.slice(0, 500));
   if (horaNocturna) {
     score += 1;
-    motivos.push('hora nocturna 20-23h');
+    motivos.push('hora tarde-noche 19-23h');
   }
   if (/plaza|parque|recinto|casco/i.test(lugar)) {
     score += 1;
@@ -139,11 +147,13 @@ export interface SubEvento {
   lugar: string;
 }
 
+// La hora puede venir sin "horas" ("23:00 - Gran Baile", lagenda).
+// Sigue exigiendo keyword pegada a la hora para no tragar prosa.
 // Admite prefijo de lugar ("A las 16:00 horas En la Plaza del Cristo. TARDEO...")
 // acotado a 1-3 palabras con mayúscula inicial para no comerse el título.
 const LUGAR_PREVIO = String.raw`(?:en\s+la\s+(?:plaza|parque|cancha|calle|teatro|recinto|casa|auditorio)(?:\s+(?:del?|de\s+la))?(?:\s+[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+){1,3}\s*\.?\s*)?`;
 const LINEA_BAILE = new RegExp(
-  String.raw`(\d{1,2}:\d{2})\s*(?:horas?|h)\b\s*\.?:?\s*` + LUGAR_PREVIO +
+  String.raw`(\d{1,2}:\d{2})\s*(?:(?:horas?|h)\b\s*\.?:?\s*)?` + LUGAR_PREVIO +
   String.raw`[–-]?\s*([^.\n]*?(?:gran baile|baile|verbena|verbenazo|tardeo|noche latina|noche boricua)[^.\n]*)\.?\s*(?:lugar:\s*([^.\n]+))?`,
   'gi'
 );
@@ -170,7 +180,8 @@ export function extraerSubEventos(programaTexto: string): SubEvento[] {
       { re: /\bcon\s+(?:la\s+actuaci[oó]n(?:es)?\s+de\s+|las\s+actuaciones\s+de\s+)?([A-ZÁÉÍÓÚÑ][^.;]{3,160})/, coma: true }
     ];
     const limpia = (s: string): string => {
-      let n = s.trim();
+      // Fuera paréntesis ("(taller de salsa...)", "(tributo a ...)") y comillas
+      let n = s.replace(/\([^()]*\)/g, ' ').trim().replace(/^[¿¡"'“”‘’(\[]+|[?!"'“”‘’)\].:;]+$/g, '').trim();
       for (let i = 0; i < 3; i++) {
         const pre = n.match(/^(la|las|los|el|orquesta|orquestas|grupo|grupos)\b\s*/i);
         if (!pre) break;
@@ -178,9 +189,18 @@ export function extraerSubEventos(programaTexto: string): SubEvento[] {
       }
       return n;
     };
+    // Lugares colados como "orquesta" ("Plaza de San Marcos", "Calle") y
+    // topónimos sueltos ("Tenerife") y frases administrativas, no artistas.
+    const ES_LUGAR = /plaza|plazola|parque|cancha|calle|callej[oó]n|teatro|iglesia|plazoleta|avenida|polideportivo|recinto|campo|pabell[oó]n|auditorio|ermita|parroquia|^(tenerife|canaria|canarias|isla|islas|sur|norte)$/i;
+    const ES_ADMIN = /entrega|premios?|nombramiento|comisi[oó]n|sorteo|rifa|descanso|trofeo|homenaje/i;
     const add = (raw: string): void => {
+      // Si venía de contexto musical ("Grupo La Calle") se conserva aunque
+      // parezca callejero; sin contexto ("Plaza de San Marcos" suelta) fuera.
+      const musicCtx = /orquesta|grupo|parranda|tributo|banda|d[uú]o|\bdj\b/i.test(raw);
       const n = limpia(raw);
-      if (n.length < 3) return;
+      if (n.length < 3 || ES_ADMIN.test(n)) return;
+      if (!musicCtx && ES_LUGAR.test(n)) return;
+      if (ES_LUGAR.test(n) && !/orquesta|grupo|parranda|tributo/i.test(n)) return;
       const dup = orq.some((o) => {
         const a = o.toLowerCase(), b = n.toLowerCase();
         return a === b || a.includes(b) || b.includes(a);
@@ -190,8 +210,11 @@ export function extraerSubEventos(programaTexto: string): SubEvento[] {
     for (const { re, coma } of patrones) {
       const mo = titulo.match(re);
       if (!mo) continue;
+      // Con comas: pelar paréntesis ANTES de partir, si no el split por "y"
+      // los rompe ("(taller de salsa Academia Ada y Belén)" -> fragmentos).
+      const base = coma ? mo[1].replace(/\([^()]*\)/g, ' ') : mo[1];
       // Sin comas en la captura (patrón preciso): partir solo por "y".
-      mo[1].split(coma ? /\s+y\s+|\s*,\s*/ : /\s+y\s+/).forEach(add);
+      base.split(coma ? /\s+y\s+|\s*,\s*/ : /\s+y\s+/).forEach(add);
     }
     out.push({ day: '', hora, titulo, orquestas: orq, lugar: (lugarRaw || '').trim() });
   }
@@ -207,6 +230,14 @@ export const MESES: Record<string, string> = {
 export function mesANum(mes: string): string {
   const k = mes.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
   return MESES[k] || MESES[mes.toLowerCase()] || '';
+}
+
+/** Ventana de contexto alrededor de la línea: evita que puntúen datos
+ *  de otros actos del mismo programa (orquestas, horas vecinas). */
+export function ventana(texto: string, titulo: string, radio = 600): string {
+  const idx = texto.indexOf(titulo.slice(0, 30));
+  if (idx === -1) return texto.slice(0, 1200);
+  return texto.slice(Math.max(0, idx - radio), idx + titulo.length + radio);
 }
 
 // Programas multi-día ("Viernes 11 de septiembre ... Sábado 12 ..."):
