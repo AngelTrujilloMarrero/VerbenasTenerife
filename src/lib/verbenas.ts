@@ -8,9 +8,11 @@ import { GUIADEISORA_URL, obtenerVerbenasGuiaDeIsora } from './guiadeisora.js';
 import { LAGENDA_URL, obtenerVerbenasLagenda } from './lagenda.js';
 import { LALAGUNA_URL, obtenerVerbenasLaLaguna } from './lalaguna.js';
 import { SANTACRUZ_URL, obtenerVerbenasSantaCruz } from './santacruz.js';
+import { SANJUANRAMBLA_URL, obtenerVerbenasSanJuanRambla } from './sanjuanrambla.js';
 import { TACORONTE_URL, obtenerVerbenasTacoronte } from './tacoronte.js';
 import { TEGUESTE_URL, obtenerVerbenasTegueste } from './tegueste.js';
 import { normTxt } from './municipios.js';
+import { avisar } from './avisos.js';
 import { porFecha, type Fuente, type Verbena } from './types.js';
 
 // Registro de fuentes. Añadir un municipio = 1 línea + su adaptador.
@@ -28,10 +30,14 @@ export const FUENTES: Fuente[] = [
   { id: 'arico', nombre: 'Arico', agendaUrl: ARICO_URL, obtener: obtenerVerbenasArico },
   { id: 'fasnia', nombre: 'Fasnia', agendaUrl: FASNIA_URL, obtener: obtenerVerbenasFasnia },
   { id: 'tacoronte', nombre: 'Tacoronte', agendaUrl: TACORONTE_URL, obtener: obtenerVerbenasTacoronte },
+  { id: 'sanjuanrambla', nombre: 'San Juan de la Rambla', agendaUrl: SANJUANRAMBLA_URL, obtener: obtenerVerbenasSanJuanRambla },
   { id: 'lagenda', nombre: 'Lagenda', agendaUrl: LAGENDA_URL, obtener: obtenerVerbenasLagenda }
 ];
 
 export type { Verbena };
+
+/** Último resultado por fuente (para el monitor /api/estado.json). */
+export const estadoFuentes: Record<string, { at: number; eventos: number; ok: boolean }> = {};
 
 const STOPW = new Set(['de', 'la', 'el', 'las', 'los', 'del', 'en', 'con', 'por', 'una', 'uno', 'y', 'al', 'fin', 'gran', 'san', 'santa',
   // Genéricos musicales: "orquesta" en común NO significa mismo baile
@@ -97,8 +103,11 @@ export async function obtenerVerbenas(municipio?: string): Promise<Verbena[]> {
   res.forEach((r, i) => {
     if (r.status !== 'fulfilled') {
       console.error(`fuente ${fuentes[i].id} falló:`, r.reason);
+      avisar(fuentes[i].nombre, 'fuente-fallo', fuentes[i].agendaUrl, String(r.reason?.message || r.reason || 'error').slice(0, 120));
+      estadoFuentes[fuentes[i].id] = { at: Date.now(), eventos: 0, ok: false };
       return;
     }
+    estadoFuentes[fuentes[i].id] = { at: Date.now(), eventos: r.value.length, ok: true };
     for (const v of r.value) {
       const dup = todas.findIndex((t) => esDuplicada(t, v));
       if (dup === -1) {

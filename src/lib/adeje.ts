@@ -11,6 +11,7 @@ import {
   tipoDeEvento
 } from './classifier.js';
 import { fetchText, textoVisible } from './http.js';
+import { rastrearProgramas } from './avisos.js';
 import type { Verbena } from './types.js';
 
 const BASE = 'https://www.adeje.es';
@@ -41,6 +42,7 @@ export async function obtenerVerbenasAdeje(): Promise<Verbena[]> {
   if (cache && Date.now() - cache.at < TTL) return cache.data;
 
   const html = await fetchText(LISTA);
+  rastrearProgramas('Adeje', html, BASE);
   const $ = cheerio.load(html);
 
   // Dos anchors por evento (imagen sin texto + título); nos quedamos con el título.

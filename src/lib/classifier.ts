@@ -176,10 +176,17 @@ const LINEA_BAILE = new RegExp(
 
 export function extraerSubEventos(programaTexto: string): SubEvento[] {
   const out: SubEvento[] = [];
+  // Viñetas de orquestas en líneas aparte ("orquestas:\n* Kimbara\n* ..."):
+  // se unen con comas para que el extractor las vea en la misma línea.
+  // Saltos en mitad de frase del OCR ("Magos\namenizado"): se unen solo
+  // entre letras para no pegar líneas independientes.
+  const texto = programaTexto
+    .replace(/([A-Za-zÁÉÍÓÚÜÑáéíóúüñ])\n([a-záéíóúüñ])/g, '$1 $2')
+    .replace(/\n\s*[*\-•]\s*/g, ', ');
   let m: RegExpExecArray | null;
   // Resetea lastIndex por si se reutiliza la regex global
   LINEA_BAILE.lastIndex = 0;
-  while ((m = LINEA_BAILE.exec(programaTexto)) !== null) {
+  while ((m = LINEA_BAILE.exec(texto)) !== null) {
     const [, horaRaw, tituloRaw, lugarRaw] = m;
     let hora = horaRaw;
     // El título puede arrastrar preámbulo ("con una verbena...", "se celebrará
@@ -287,7 +294,7 @@ export function extraerOrquestas(titulo: string): string[] {
 // en pasado ("la verbena fue un éxito").
 const TIENE_MUSICA = /orquesta|grupo|banda|dj|parranda|\bson\b|tributo|latin|band\b/i;
 const EN_PASADO = /\b(fue|fueron|tuvo|hubo|han sido|se celebró|fueron un éxito)\b/i;
-const LINEA_SIN_HORA = /(?:((?:fiesta|gran fiesta|fiesta joven)\s+y\s+))?(gran baile|baile popular|verbena|baile de magos|baile de taifa|concierto bailable)\b([^.\n]{0,180}?)(?=[.]|$)/gi;
+const LINEA_SIN_HORA = /(?:((?:fiesta|gran fiesta|fiesta joven)\s+y\s+))?(gran baile|baile popular|verbena|baile de magos|baile de taifa|concierto bailable|baile\s+(?:al ritmo|amenizad[oa]s?|a cargo))\b([^.\n]{0,180}?)(?=[.]|$|\n)/gi;
 const DIAS_CORTE = /\s+(?:el\s+)?(?:lunes|martes|miércoles|miercoles|jueves|viernes|sábado|sabado|domingo)\b/i;
 
 export interface BaileSinHora {
@@ -318,7 +325,12 @@ export function extraerBailesSinHora(textoOriginal: string): BaileSinHora[] {
   const out: BaileSinHora[] = [];
   // El punto de una abreviatura ("St. Pedro") cortaba el título en seco;
   // se elimina solo el punto (la abreviatura se conserva).
-  const texto = textoOriginal.replace(/\b(St|Sta|Sr|Sra|Srt|Dr|Dra|D|Ntra|Ntro|Gral|Cnel|Avda)\.(?=\s)/gi, '$1');
+  // Viñetas de orquestas en líneas aparte ("orquestas:\n* Kimbara\n* ..."):
+  // se unen con comas para que el extractor las vea en la misma línea.
+  const texto = textoOriginal
+    .replace(/\b(St|Sta|Sr|Sra|Srt|Dr|Dra|D|Ntra|Ntro|Gral|Cnel|Avda)\.(?=\s)/gi, '$1')
+    .replace(/([A-Za-zÁÉÍÓÚÜÑáéíóúüñ])\n([a-záéíóúüñ])/g, '$1 $2')
+    .replace(/\n\s*[*\-•]\s*/g, ', ');
   let m: RegExpExecArray | null;
   LINEA_SIN_HORA.lastIndex = 0;
   while ((m = LINEA_SIN_HORA.exec(texto)) !== null) {

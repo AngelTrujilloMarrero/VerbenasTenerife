@@ -13,6 +13,7 @@ import {
   ventana
 } from './classifier.js';
 import { fetchText, textoConSaltos } from './http.js';
+import { rastrearProgramas } from './avisos.js';
 import type { Verbena } from './types.js';
 
 const BASE = 'https://www.fasnia.com';
@@ -45,6 +46,7 @@ async function descubrir(): Promise<Candidato[]> {
   for (const page of paginas) {
     try {
       const html = await fetchText(page);
+      rastrearProgramas(MUNI, html, BASE);
       const $ = cheerio.load(html);
       $('a[href]').each((_, a) => {
         let href = $(a).attr('href') || '';

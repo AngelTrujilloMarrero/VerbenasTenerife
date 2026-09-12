@@ -2,10 +2,15 @@
 // Descarga las páginas, las OCR-ea y deja el texto en src/lib/data/ocr-programas.json
 // para que los adaptadores lo lean sin OCR en runtime (portable a Vercel).
 //
-// Uso:
+// Uso (imágenes en una página web):
 //   node scripts/ocr-programas.mjs --municipio=arico \
 //     --url=https://www.ayuntamientodearico.com/programa-fiestas-lustrales-virgen-de-abona-2026/ \
 //     [--patron="programa|page-\\d"] [--max=40] [--forzar]
+//
+// Uso (PDF escaneado: se renderiza página a página con PDFKit y luego OCR):
+//   node scripts/ocr-programas.mjs --municipio=sanjuanrambla \
+//     --pdf=https://www.sanjuandelarambla.es/wp-content/uploads/2026/09/Programa-San-Jose-2026.pdf \
+//     [--max=40] [--forzar]
 //
 // Requiere macOS con Xcode CLT (swiftc). Usa `curl` para descargar (evita el
 // problema de cadenas TLS incompletas de algunos ayuntamientos).
@@ -25,8 +30,9 @@ const args = Object.fromEntries(
 
 const municipio = String(args.municipio || '').toLowerCase();
 const pagina = args.url;
-if (!municipio || !pagina) {
-  console.error('uso: node scripts/ocr-programas.mjs --municipio=<id> --url=<pagina> [--patron=regex] [--max=40] [--forzar]');
+const pdfUrl = args.pdf;
+if (!municipio || (!pagina && !pdfUrl)) {
+  console.error('uso: node scripts/ocr-programas.mjs --municipio=<id> (--url=<pagina> | --pdf=<pdf>) [--patron=regex] [--max=40] [--forzar]');
   process.exit(2);
 }
 if (process.platform !== 'darwin') {
@@ -41,6 +47,7 @@ const OUT = args.salida
   : path.join(root, '..', 'src', 'lib', 'data', 'ocr-programas.json');
 const CACHE = path.join(root, '..', '.cache', 'ocr', municipio);
 const BIN = path.join(root, '..', '.cache', 'ocr-vision');
+const PDFBIN = path.join(root, '..', '.cache', 'pdf-a-png');
 
 const curl = (url, out) =>
   execFileSync('curl', ['-sL', '--max-time', '120', '-A', 'Mozilla/5.0', url, '-o', out],
@@ -56,46 +63,82 @@ function compilaVision() {
   execFileSync('swiftc', ['-O', path.join(root, 'ocr-vision.swift'), '-o', BIN], { stdio: 'inherit' });
 }
 
+function compilaPdf() {
+  if (fs.existsSync(PDFBIN)) return;
+  fs.mkdirSync(path.dirname(PDFBIN), { recursive: true });
+  console.log('compilando helper PDF…');
+  execFileSync('swiftc', ['-O', path.join(root, 'pdf-a-png.swift'), '-o', PDFBIN], { stdio: 'inherit' });
+}
+
 function anyoDe(html, url) {
   return (url.match(/(20\d{2})/) || html.match(/Fecha de publicaci[oó]n[\s\S]{0,400}?(20\d{2})/) ||
     [null, String(new Date().getFullYear())])[1];
 }
 
-console.log(`descargando ${pagina}`);
-const html = curlTexto(pagina);
-const $ = cheerio.load(html);
-const patron = new RegExp(PATRON, 'i');
-const urls = [];
-$('img').each((_, el) => {
-  const src = $(el).attr('src') || $(el).attr('data-src') || '';
-  if (!/^https?:/i.test(src)) return;
-  if (!patron.test(src)) return;
-  // fuera miniaturas de WordPress (-212x300.jpg)
-  if (/-\d{2,4}x\d{2,4}\.(jpg|jpeg|png|webp)$/i.test(src)) return;
-  if (!urls.includes(src)) urls.push(src);
-});
-
-const numPagina = (u) => {
-  const m = u.match(/(?:page|pag|p)[-_]?(\d{2,4})(?=[^\d]|$)/i) || u.match(/(\d{2,4})(?=\.[a-z]+$)/i);
-  return m ? parseInt(m[1], 10) : 0;
-};
-urls.sort((a, b) => numPagina(a) - numPagina(b));
-if (!urls.length) {
-  console.error(`no encontré imágenes con patrón /${PATRON}/ en ${pagina}`);
-  process.exit(4);
-}
-console.log(`páginas detectadas: ${urls.length}`);
-
 fs.mkdirSync(CACHE, { recursive: true });
-const ficheros = urls.slice(0, MAX).map((u, i) => {
-  const ext = (u.match(/\.(jpg|jpeg|png|webp)(?:\?|$)/i) || [null, 'jpg'])[1].toLowerCase();
-  const f = path.join(CACHE, `p${String(i + 1).padStart(3, '0')}.${ext}`);
-  if (args.forzar || !fs.existsSync(f)) {
-    process.stdout.write(`  ↓ ${path.basename(u)}\n`);
-    curl(u, f);
+
+let ficheros;
+let fuente;
+let anyo;
+if (pdfUrl) {
+  // PDF escaneado: renderiza cada página a PNG con PDFKit y luego OCR.
+  const pdfFile = path.join(CACHE, 'programa.pdf');
+  if (args.forzar || !fs.existsSync(pdfFile)) {
+    console.log(`descargando ${pdfUrl}`);
+    curl(String(pdfUrl), pdfFile);
   }
-  return f;
-});
+  compilaPdf();
+  const n = Number(execFileSync(PDFBIN, [pdfFile], { encoding: 'utf8' }).trim()) || 0;
+  const total = Math.min(n, MAX);
+  console.log(`páginas PDF: ${n} (se procesan ${total})`);
+  ficheros = [];
+  for (let i = 1; i <= total; i++) {
+    const f = path.join(CACHE, `p${String(i).padStart(3, '0')}.png`);
+    if (args.forzar || !fs.existsSync(f)) {
+      execFileSync(PDFBIN, [pdfFile, String(i), f], { stdio: ['ignore', 'ignore', 'inherit'] });
+    }
+    ficheros.push(f);
+  }
+  fuente = String(pdfUrl);
+  anyo = anyoDe('', fuente);
+} else {
+  console.log(`descargando ${pagina}`);
+  const html = curlTexto(pagina);
+  const $ = cheerio.load(html);
+  const patron = new RegExp(PATRON, 'i');
+  const urls = [];
+  $('img').each((_, el) => {
+    const src = $(el).attr('src') || $(el).attr('data-src') || '';
+    if (!/^https?:/i.test(src)) return;
+    if (!patron.test(src)) return;
+    // fuera miniaturas de WordPress (-212x300.jpg)
+    if (/-\d{2,4}x\d{2,4}\.(jpg|jpeg|png|webp)$/i.test(src)) return;
+    if (!urls.includes(src)) urls.push(src);
+  });
+
+  const numPagina = (u) => {
+    const m = u.match(/(?:page|pag|p)[-_]?(\d{2,4})(?=[^\d]|$)/i) || u.match(/(\d{2,4})(?=\.[a-z]+$)/i);
+    return m ? parseInt(m[1], 10) : 0;
+  };
+  urls.sort((a, b) => numPagina(a) - numPagina(b));
+  if (!urls.length) {
+    console.error(`no encontré imágenes con patrón /${PATRON}/ en ${pagina}`);
+    process.exit(4);
+  }
+  console.log(`páginas detectadas: ${urls.length}`);
+
+  ficheros = urls.slice(0, MAX).map((u, i) => {
+    const ext = (u.match(/\.(jpg|jpeg|png|webp)(?:\?|$)/i) || [null, 'jpg'])[1].toLowerCase();
+    const f = path.join(CACHE, `p${String(i + 1).padStart(3, '0')}.${ext}`);
+    if (args.forzar || !fs.existsSync(f)) {
+      process.stdout.write(`  ↓ ${path.basename(u)}\n`);
+      curl(u, f);
+    }
+    return f;
+  });
+  fuente = pagina;
+  anyo = anyoDe(html, pagina);
+}
 
 compilaVision();
 console.log('OCR…');
@@ -108,8 +151,8 @@ if (fs.existsSync(OUT)) {
 }
 data[municipio] = {
   generado: new Date().toISOString().slice(0, 10),
-  fuente: pagina,
-  anyo: anyoDe(html, pagina),
+  fuente,
+  anyo,
   totalPaginas: paginas.length,
   paginas,
   texto: paginas.join('\n')

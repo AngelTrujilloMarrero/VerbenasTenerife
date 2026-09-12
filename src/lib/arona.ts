@@ -1,6 +1,7 @@
 import * as cheerio from 'cheerio';
 import { clasificarDetalle, extraerLugar, extraerSubEventos, tipoDeEvento } from './classifier.js';
 import { fetchText, textoVisible } from './http.js';
+import { rastrearProgramas } from './avisos.js';
 import type { Verbena } from './types.js';
 
 const BASE = 'https://www.arona.org';
@@ -21,6 +22,8 @@ export async function obtenerVerbenasArona(): Promise<Verbena[]> {
   if (cache && Date.now() - cache.at < TTL) return cache.data;
 
   const html = await fetchText(LISTA);
+  // Vigila programas nuevos del año (monitor /api/estado.json).
+  rastrearProgramas('Arona', html, BASE);
   const $ = cheerio.load(html);
 
   // Tarjetas: "11 SEP. [titulo](link)". El link lleva /Ver?id= o /Grupo?id=

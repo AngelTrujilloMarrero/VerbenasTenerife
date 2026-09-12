@@ -8,6 +8,7 @@ import {
   tipoDeEvento
 } from './classifier.js';
 import { fetchText } from './http.js';
+import { rastrearProgramas } from './avisos.js';
 import { anyoDelTexto, obtenerTextoPdf } from './pdf.js';
 import type { Verbena } from './types.js';
 
@@ -63,21 +64,19 @@ export async function obtenerVerbenasLaLaguna(): Promise<Verbena[]> {
   if (cache && Date.now() - cache.at < TTL) return cache.data;
 
   const html = await fetchText(FIESTAS);
+  rastrearProgramas('La Laguna', html, BASE);
   const programas = descubrirProgramas(html);
   const verbenas: Verbena[] = [];
 
   for (const prog of programas) {
     let pdf;
     try {
-      pdf = await obtenerTextoPdf(prog.url, MAX_BYTES_CRISTO);
+      pdf = await obtenerTextoPdf(prog.url, MAX_BYTES_CRISTO, false, 'La Laguna');
     } catch (e) {
       console.error('pdf fallo', prog.url, e);
       continue;
     }
-    if (pdf.escaneado) {
-      console.warn(`pdf escaneado sin texto (Fase 2 IA): ${prog.url}`);
-      continue;
-    }
+    if (pdf.escaneado) continue; // avisado en pdf.ts (monitor /api/estado.json)
     const anyo = anyoDelTexto(pdf.texto);
     const slug = (prog.url.split('/').pop() || 'pdf').toLowerCase()
       .replace(/\.pdf.*$/, '').replace(/[^a-z0-9]+/g, '-').slice(0, 40);

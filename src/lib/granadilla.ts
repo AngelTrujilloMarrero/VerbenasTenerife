@@ -9,6 +9,7 @@ import {
   ventana
 } from './classifier.js';
 import { fetchText, textoConSaltos } from './http.js';
+import { rastrearProgramas } from './avisos.js';
 import type { Verbena } from './types.js';
 
 const BASE = 'https://www.granadilladeabona.org';
@@ -61,6 +62,7 @@ function nucleoDe(texto: string): string {
 /** Noticias recientes de fiestas (tag cultura-y-fiestas): de aquí sale el programa. */
 async function noticiasFiestas(): Promise<{ titulo: string; url: string }[]> {
   const html = await fetchText(TAG);
+  rastrearProgramas(MUNI, html, BASE);
   const $ = cheerio.load(html);
   const out: { titulo: string; url: string }[] = [];
   const seen = new Set<string>();

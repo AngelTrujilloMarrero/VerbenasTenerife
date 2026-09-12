@@ -9,6 +9,7 @@ import {
   tipoDeEvento
 } from './classifier.js';
 import { fetchText, textoVisible } from './http.js';
+import { rastrearProgramas } from './avisos.js';
 import type { Verbena } from './types.js';
 
 const BASE = 'https://www.guiadeisora.org';
@@ -47,6 +48,7 @@ async function noticiasCandidatas(): Promise<{ titulo: string; url: string }[]> 
   for (const q of ['verbena', 'orquesta']) {
     try {
       const html = await fetchText(`${BASE}/corp/?s=${q}`);
+      rastrearProgramas('Guía de Isora', html, BASE);
       const $ = cheerio.load(html);
       $('a[href*="/corp/"]').each((_, a) => {
         const href = $(a).attr('href') || '';

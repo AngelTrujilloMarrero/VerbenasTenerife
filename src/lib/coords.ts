@@ -9,7 +9,8 @@ export const COORDS: Record<string, { lat: number; lon: number }> = {
   elrosario: { lat: 28.526, lon: -16.368 },
   arico: { lat: 28.1833, lon: -16.4667 },
   fasnia: { lat: 28.2398, lon: -16.4243 },
-  tacoronte: { lat: 28.4787, lon: -16.4119 }
+  tacoronte: { lat: 28.4787, lon: -16.4119 },
+  sanjuandelarambla: { lat: 28.3947, lon: -16.6486 }
 };
 
 export function coordsDe(municipio: string): { lat: number; lon: number } | null {

@@ -10,6 +10,7 @@ import {
   ventana
 } from './classifier.js';
 import { fetchText, textoConSaltos } from './http.js';
+import { rastrearProgramas } from './avisos.js';
 import type { Verbena } from './types.js';
 
 const BASE = 'https://fiestasdesantacruz.com';
@@ -78,6 +79,7 @@ async function descubrir(): Promise<{ titulo: string; url: string }[]> {
   };
 
   const html = await fetchText(NOTICIAS);
+  rastrearProgramas(MUNI, html, BASE);
   const $ = cheerio.load(html);
   $('a[href*="/blog/"]').each((_, a) => {
     const href = $(a).attr('href') || '';

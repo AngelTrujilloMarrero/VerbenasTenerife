@@ -15,6 +15,7 @@ import {
   ventana
 } from './classifier.js';
 import { fetchText } from './http.js';
+import { rastrearProgramas } from './avisos.js';
 import { anyoDelTexto, obtenerTextoPdf } from './pdf.js';
 import type { Verbena } from './types.js';
 
@@ -38,6 +39,7 @@ async function descubrir(): Promise<Candidato[]> {
   const out: Candidato[] = [];
   const seen = new Set<string>();
   const html = await fetchText(LISTA);
+  rastrearProgramas(MUNI, html, BASE);
   const $ = cheerio.load(html);
   $('a[href*="/eventos/"]').each((_, a) => {
     const href = $(a).attr('href') || '';
@@ -55,11 +57,8 @@ async function descubrir(): Promise<Candidato[]> {
 async function pdfPrograma(html: string): Promise<string | null> {
   const m = html.match(/drive\.google\.com\/file\/d\/([A-Za-z0-9_-]+)/);
   if (!m) return null;
-  const pdf = await obtenerTextoPdf(`https://drive.google.com/uc?export=download&id=${m[1]}`, undefined, true);
-  if (pdf.escaneado) {
-    console.warn(`tacoronte pdf escaneado (Fase 2 IA): ${m[1]}`);
-    return null;
-  }
+  const pdf = await obtenerTextoPdf(`https://drive.google.com/uc?export=download&id=${m[1]}`, undefined, true, MUNI);
+  if (pdf.escaneado) return null; // avisado en pdf.ts (monitor /api/estado.json)
   return pdf.texto;
 }
 

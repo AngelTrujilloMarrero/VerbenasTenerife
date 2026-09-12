@@ -11,6 +11,7 @@ import {
   ventana
 } from './classifier.js';
 import { fetchText, textoConSaltos } from './http.js';
+import { rastrearProgramas } from './avisos.js';
 import type { Verbena } from './types.js';
 
 const BASE = 'https://www.ayuntamientoelrosario.org';
@@ -38,6 +39,7 @@ async function descubrir(): Promise<Candidato[]> {
   for (const q of ['verbena', 'baile', 'orquesta', 'fiestas']) {
     try {
       const html = await fetchText(`${BASE}/?s=${q}`);
+      rastrearProgramas(MUNI, html, BASE);
       let m: RegExpExecArray | null;
       pat.lastIndex = 0;
       while ((m = pat.exec(html)) !== null) {

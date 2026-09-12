@@ -2,6 +2,7 @@
 // Estrategia: pdfjs-dist en local. Si el PDF es escaneado (sin texto),
 // se marca y queda para Fase 2 (Gemini Vision free-tier), no se silencia.
 import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs';
+import { avisar } from './avisos.js';
 import { fetchBytes } from './http.js';
 
 export interface PdfTexto {
@@ -73,7 +74,7 @@ function leerBloque(items: ItemPagina[]): string {
     .join(' ');
 }
 
-export async function obtenerTextoPdf(url: string, maxBytes = 30 * 1024 * 1024, columnas = false): Promise<PdfTexto> {
+export async function obtenerTextoPdf(url: string, maxBytes = 30 * 1024 * 1024, columnas = false, municipio = ''): Promise<PdfTexto> {
   const hit = cache.get(url);
   if (hit && Date.now() - hit.at < TTL) return hit.pdf;
 
@@ -110,6 +111,11 @@ export async function obtenerTextoPdf(url: string, maxBytes = 30 * 1024 * 1024, 
   const texto = sinGuiones.replace(/[\s\u00A0]+/g, ' ').replace(/\n\s*\n+/g, '\n').trim();
   const pdf: PdfTexto = { url, texto, paginas: doc.numPages, escaneado: texto.length < 200 };
   cache.set(url, { at: Date.now(), pdf });
+  // Un PDF escaneado nuevo se avisa solo (monitor /api/estado.json); el
+  // adaptador decide si lo salta u OCR-ea. Sin municipio no se puede asignar.
+  if (pdf.escaneado && municipio) {
+    avisar(municipio, 'pdf-escaneado', url, `sin texto (${doc.numPages} págs, pendiente OCR)`);
+  }
   return pdf;
 }
 

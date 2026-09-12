@@ -17,18 +17,21 @@ import {
 import { fetchText, textoConSaltos } from './http.js';
 import { avisar, rastrearProgramas } from './avisos.js';
 import { textoOcr } from './ocr.js';
+import { anyoDelTexto, obtenerTextoPdf } from './pdf.js';
 import type { Verbena } from './types.js';
 
-const BASE = 'https://www.ayuntamientodearico.com';
-export const ARICO_URL = `${BASE}/category/fiestas/`;
+const BASE = 'https://www.sanjuandelarambla.es';
+export const SANJUANRAMBLA_URL = `${BASE}/actualidad/category/fiestas/`;
+const AREA_FIESTAS = `${BASE}/areas-municipales/area-de-fiestas/`;
 
-const MUNI = 'Arico';
-const NUCLEOS = ['Villa de Arico', 'Arico Viejo', 'Punta de Abona', 'La Sabinita', 'El Río'];
+const MUNI = 'San Juan de la Rambla';
+const NUCLEOS = ['San José', 'San Juan', 'La Vera', 'Las Aguas', 'Las Rosas', 'Los Canarios', 'La Paz', 'El Rosario Oramas', 'Rosario Oramas'];
 
 let cache: { at: number; data: Verbena[] } | null = null;
 const TTL = 1000 * 60 * 60;
 const PAUSA_MS = 1200;
 const MAX_DETALLES = 8;
+const MAX_PDF_BYTES = 8 * 1024 * 1024;
 
 const espera = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -45,7 +48,7 @@ async function descubrir(): Promise<Candidato[]> {
     seen.add(url);
     out.push({ titulo: t, url });
   };
-  const paginas = [`${BASE}/`, `${BASE}/category/fiestas/`, `${BASE}/?s=verbena`, `${BASE}/?s=fiestas`];
+  const paginas = [`${BASE}/`, SANJUANRAMBLA_URL, `${BASE}/?s=verbena`, `${BASE}/?s=fiestas`];
   for (const page of paginas) {
     try {
       const html = await fetchText(page);
@@ -64,10 +67,31 @@ async function descubrir(): Promise<Candidato[]> {
   return out.slice(0, MAX_DETALLES);
 }
 
-/** Año de publicación del post ("Fecha de publicación: ... 2024"), o null.
- *  Sin esto los posts de 2024 (URL sin año) se fechaban con el año actual. */
+/** Programas del año en curso enlazados desde el área de Fiestas
+ *  ("Programa 2026" -> .../Programa-San-Jose-2026.pdf). */
+async function descubrirProgramas(): Promise<string[]> {
+  try {
+    const html = await fetchText(AREA_FIESTAS);
+    const $ = cheerio.load(html);
+    const out: string[] = [];
+    const vigente = String(new Date().getFullYear());
+    $('a[href$=".pdf"]').each((_, a) => {
+      const href = $(a).attr('href') || '';
+      if (!href.includes(vigente)) return;
+      const url = href.startsWith('http') ? href : BASE + href;
+      if (!out.includes(url)) out.push(url);
+    });
+    return out;
+  } catch {
+    return [];
+  }
+}
+
+/** Año de publicación del post (`<span class="published">19 junio, 2026</span>`),
+ *  o null. Sin esto los posts de 2025 (URL sin año) se fecharían con el actual. */
 function anyoPublicacion(html: string): number | null {
-  const m = html.match(/Fecha de publicaci[oó]n[\s\S]{0,400}?(20\d{2})/i);
+  const m = html.match(/<span class="published">[^<]*?(20\d{2})/i) ||
+    html.match(/Fecha de publicaci[oó]n[\s\S]{0,400}?(20\d{2})/i);
   return m ? Number(m[1]) : null;
 }
 
@@ -92,16 +116,16 @@ function nucleoDe(texto: string): string {
  *  src/lib/data/ocr-programas.json (generado por scripts/ocr-programas.mjs). */
 function programasPendientes(html: string, url: string): void {
   const imgs = html.match(/PROGRAMA[^"']*?[_-]page-\d+\.(?:jpg|jpeg|png|webp)/gi);
-  if (imgs && imgs.length > 2 && !textoOcr('arico')) {
+  if (imgs && imgs.length > 2 && !textoOcr('sanjuanrambla')) {
     avisar(MUNI, 'programa-imagen', url, `solo-imagen (${imgs.length} págs) sin OCR`);
   }
 }
 
-export async function obtenerVerbenasArico(): Promise<Verbena[]> {
+export async function obtenerVerbenasSanJuanRambla(): Promise<Verbena[]> {
   if (cache && Date.now() - cache.at < TTL) return cache.data;
   const verbenas: Verbena[] = [];
   const push = (v: Verbena) => {
-    // Evita duplicados del mismo acto entre noticia y OCR (mismo día y lineup).
+    // Evita duplicados del mismo acto entre noticia, programa y OCR.
     const dup = verbenas.some((x) =>
       x.id === v.id ||
       (x.day === v.day && x.hora === v.hora &&
@@ -110,13 +134,11 @@ export async function obtenerVerbenasArico(): Promise<Verbena[]> {
     if (!dup) verbenas.push(v);
   };
 
-  /** Parte un texto (noticia o programa OCR) por días y extrae verbenas. */
+  /** Parte un texto (noticia, programa PDF u OCR) por días y extrae verbenas. */
   const procesar = (cuerpo: string, opts: { anyo: string; slug: string; url: string; etiqueta: string }) => {
     const ctx = mesContexto(cuerpo);
     const ref = ctx.mes && opts.anyo ? { mes: ctx.mes, anyo: opts.anyo } : undefined;
     const lugar = lugarCercano(cuerpo.slice(0, 2000), opts.etiqueta) || nucleoDe(cuerpo) || MUNI;
-    // La prosa solo nombra el mes la primera vez ("...13 de agosto... sábado
-    // 5 se celebrará..."). Se hereda del encabezado anterior.
     let mesPrev = '', anyoPrev = '';
     for (const sec of partirPorDias(cuerpo, ref)) {
       if (sec.mes) mesPrev = sec.mes;
@@ -133,7 +155,7 @@ export async function obtenerVerbenasArico(): Promise<Verbena[]> {
         const cls = clasificarDetalle(l.titulo, ventana(sec.texto, l.titulo, 400), l.hora, lugarLinea, l.extra);
         if (!cls.esVerbena) continue;
         push({
-          id: `arico-${opts.slug.slice(0, 20)}-${l.hora.replace(':', '') || 'sh'}-${day}-${l.titulo.split(/\s+/).slice(0, 3).join(' ')}`.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9-]+/g, '-'),
+          id: `sanjuanrambla-${opts.slug.slice(0, 20)}-${l.hora.replace(':', '') || 'sh'}-${day}-${l.titulo.split(/\s+/).slice(0, 3).join(' ')}`.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9-]+/g, '-'),
           titulo: l.titulo, day, hora: l.hora, municipio: MUNI,
           lugar: lugarLinea, orquestas: l.orquestas,
           tipo: tipoDeEvento(l.titulo), url: opts.url,
@@ -147,18 +169,17 @@ export async function obtenerVerbenasArico(): Promise<Verbena[]> {
   try {
     items = await descubrir();
   } catch (e) {
-    console.error('arico índice fallo', e);
+    console.error('sanjuanrambla índice fallo', e);
   }
 
   for (const it of items) {
     try {
       await espera(PAUSA_MS);
       const d = await fetchText(it.url);
-      // Filtro de vigencia: la agenda de Arico reutiliza slugs sin año, así que
-      // los programas de 2024 se colaban fechados en 2026. Se descarta lo viejo.
+      // Filtro de vigencia: los slugs no llevan año y hay posts de 2025.
       const pub = anyoPublicacion(d);
       if (pub && pub < new Date().getFullYear()) {
-        console.warn(`arico post antiguo (${pub}) descartado: ${it.url}`);
+        console.warn(`sanjuanrambla post antiguo (${pub}) descartado: ${it.url}`);
         continue;
       }
       programasPendientes(d, it.url);
@@ -167,12 +188,36 @@ export async function obtenerVerbenasArico(): Promise<Verbena[]> {
       const slug = it.url.split('/').filter(Boolean).pop() || 'noticia';
       procesar(cuerpo, { anyo, slug, url: it.url, etiqueta: `noticia: ${it.titulo.slice(0, 50)}` });
     } catch (e) {
-      console.error('arico detalle fallo', it.url, e);
+      console.error('sanjuanrambla detalle fallo', it.url, e);
+    }
+  }
+
+  // Programas oficiales (los PDF son escaneados; el texto viene del OCR).
+  // Si ya hay OCR cacheado de esa URL, no se descarga de nuevo.
+  const ocrPrevio = textoOcr('sanjuanrambla');
+  for (const url of await descubrirProgramas()) {
+    try {
+      if (ocrPrevio && url === ocrPrevio.fuente) continue;
+      await espera(PAUSA_MS);
+      // Evita descargas pesadas (San Felipe Neri: 22 MB de escaneos).
+      const head = await fetch(url, { method: 'HEAD' });
+      const tam = Number(head.headers.get('content-length') || 0);
+      if (tam > MAX_PDF_BYTES) {
+        console.warn(`sanjuanrambla pdf pesado (${(tam / 1048576).toFixed(1)} MB) omitido: ${url}`);
+        continue;
+      }
+      const pdf = await obtenerTextoPdf(url, undefined, false, MUNI);
+      if (pdf.escaneado) continue; // avisado en pdf.ts (monitor /api/estado.json)
+      const anyo = anyoDelTexto(pdf.texto) || url.match(/(20\d{2})/)?.[1] || String(new Date().getFullYear());
+      const slug = (url.split('/').pop() || 'programa').toLowerCase().replace(/\.pdf.*$/, '').replace(/[^a-z0-9]+/g, '-').slice(0, 30);
+      procesar(normalizarHoras(pdf.texto), { anyo, slug, url, etiqueta: `programa: ${slug.slice(0, 40)}` });
+    } catch (e) {
+      console.error('sanjuanrambla programa fallo', url, e);
     }
   }
 
   // Programa publicado solo como imágenes (OCR cacheado, ver scripts/ocr-programas.mjs).
-  const ocr = textoOcr('arico');
+  const ocr = textoOcr('sanjuanrambla');
   if (ocr?.texto) {
     procesar(normalizarHoras(ocr.texto), {
       anyo: ocr.anyo || String(new Date().getFullYear()),
