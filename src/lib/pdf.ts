@@ -108,7 +108,22 @@ export async function obtenerTextoPdf(url: string, maxBytes = 30 * 1024 * 1024, 
     (m, izq: string, der: string) =>
       /^[a-záéíóúüñ]/.test(der) || (esMayus(izq) && esMayus(der)) ? izq + der : m
   );
-  const texto = sinGuiones.replace(/[\s\u00A0]+/g, ' ').replace(/\n\s*\n+/g, '\n').trim();
+  // Los PDF maquetados meten controles de formato invisibles entre letras
+  // (Güímar: "septiemb\x1Ee" parte "septiembre" y rompe mesANum) o cortan
+  // la última letra ("septiembe"). Se tiran los C0/C1 salvo \t\n\r y se
+  // repone la "r" final comida en los nombres de mes (case a mano).
+  // eslint-disable-next-line no-control-regex
+  const sinControles = sinGuiones.replace(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]/g, '').replace(/\b[Ss][Ee][Pp][Tt][Ii][Ee][Mm][Bb][Ee]\b/g, (m) =>
+      m === m.toUpperCase() ? 'SEPTIEMBRE' : m[0] === m[0].toUpperCase() ? 'Septiembre' : 'septiembre')
+    .replace(/\b[Ss][Ee][Tt][Ii][Ee][Mm][Bb][Ee]\b/g, (m) =>
+      m === m.toUpperCase() ? 'SETIEMBRE' : m[0] === m[0].toUpperCase() ? 'Setiembre' : 'setiembre')
+    .replace(/\b[Nn][Oo][Vv][Ii][Ee][Mm][Bb][Rr][Ee]\b/g, (m) =>
+      m === m.toUpperCase() ? 'NOVIEMBRE' : m[0] === m[0].toUpperCase() ? 'Noviembre' : 'noviembre')
+    .replace(/\b[Dd][Ii][Cc][Ii][Ee][Mm][Bb][Rr][Ee]\b/g, (m) =>
+      m === m.toUpperCase() ? 'DICIEMBRE' : m[0] === m[0].toUpperCase() ? 'Diciembre' : 'diciembre')
+    .replace(/\b[Oo][Cc][Tt][Uu][Bb][Ee]\b/g, (m) =>
+      m === m.toUpperCase() ? 'OCTUBRE' : m[0] === m[0].toUpperCase() ? 'Octubre' : 'octubre');
+  const texto = sinControles.replace(/[\s\u00A0]+/g, ' ').replace(/\n\s*\n+/g, '\n').trim();
   const pdf: PdfTexto = { url, texto, paginas: doc.numPages, escaneado: texto.length < 200 };
   cache.set(url, { at: Date.now(), pdf });
   // Un PDF escaneado nuevo se avisa solo (monitor /api/estado.json); el

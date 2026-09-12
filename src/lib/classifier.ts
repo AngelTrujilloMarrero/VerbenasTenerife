@@ -226,8 +226,12 @@ export function extraerOrquestas(titulo: string): string[] {
     // más fallback PDF: "Verbena con ... Grupo Pati, Atenia y la Orquesta Olimpia".
     // Se combinan ambos patrones sin duplicados.
     const orq: string[] = [];
-    const patrones: { re: RegExp; coma: boolean }[] = [
-      { re: /orquestas?\s*:?\s*([^.,;]+(?:y[^.,;]+)?)/i, coma: false },
+    // coma=true parte por coma+y; coma='solo-coma' parte por comas y ·/•
+    // ("Orquesta La Sabrosa y Nueva Línea" es UNA orquesta, no dos).
+    const patrones: { re: RegExp; coma: boolean | 'solo-coma' }[] = [
+      // Preciso: "Orquesta(s) X..." + resto ("Orquestas Kimbara, The Boys
+      // Machine y Samady"). El genérico (mayúscula) cubre el resto.
+      { re: /orquestas?\s+((?:la\s+|el\s+|los\s+|las\s+)?[A-ZÁÉÍÓÚÑ][^.,;]{2,120})/i, coma: 'solo-coma' },
       // "Verbena con/a cargo de ... Grupo Pati, Atenia y la Orquesta Olimpia" y
       // "MEGAVERBENAZO ... con ARMONÍA SHOW ..., LEDES DÍAZ, ...".
       // Estos SÍ admiten comas (luego se parte por coma/y).
@@ -288,7 +292,10 @@ export function extraerOrquestas(titulo: string): string[] {
       const base = coma ? mo[1].replace(/\([^()]*\)/g, ' ') : mo[1];
       // Sin comas en la captura (patrón preciso): partir solo por "y".
       // También se parte por ·/• ("00:00-1:30 Orquesta Tropin · 1:30 Pepe...").
-      base.split(coma ? /\s+y\s+|\s*,\s*|\s*[·•]\s*/ : /\s+y\s+/).forEach(add);
+      const partes = coma === 'solo-coma'
+        ? base.split(/\s*,\s*|\s*[·•]\s*/)
+        : base.split(coma ? /\s+y\s+|\s*,\s*|\s*[·•]\s*/ : /\s+y\s+/);
+      partes.forEach(add);
     }
     return orq;
 }
@@ -298,12 +305,13 @@ export function extraerOrquestas(titulo: string): string[] {
 // ("Fiesta Joven y Verbena") aunque no nombre artista. Se excluyen crónicas
 // en pasado ("la verbena fue un éxito").
 // Ampliado con marcas locales verificadas: "tardeo" (genérico), "fiesta
-// canaria" (Icod: cierra con orquestas) y "noche de kioscos" (Icod: noches
-// de verbena con orquesta+DJs). La extracción solo propone; el clasificador
-// (>=4) sigue filtrando (una fiesta canaria solo folclórica no puntúa).
+// canaria" (Icod: cierra con orquestas), "noche de kioscos" (Icod: noches
+// de verbena con orquesta+DJs), "fiesta joven" y "baile con" (Güímar: "Baile
+// con la Orquesta X", "Fiesta Joven con ... Renzzo El Selector y Dj").
+// La extracción solo propone; el clasificador (>=4) sigue filtrando.
 const TIENE_MUSICA = /orquesta|grupo|banda|dj|parranda|\bson\b|tributo|latin|band\b/i;
 const EN_PASADO = /\b(fue|fueron|tuvo|hubo|han sido|se celebró|fueron un éxito)\b/i;
-const LINEA_SIN_HORA = /(?:((?:fiesta|gran fiesta|fiesta joven)\s+y\s+))?(gran baile|baile popular|verbena|verbenas|baile de magos|baile de taifa|concierto bailable|tardeo|fiesta canaria|noche de kioscos|baile\s+(?:al ritmo|amenizad[oa]s?|a cargo))\b([^.\n]{0,180}?)(?=[.]|$|\n)/gi;
+const LINEA_SIN_HORA = /(?:((?:fiesta|gran fiesta|fiesta joven)\s+y\s+))?(gran baile|baile popular|verbena|verbenas|baile de magos|baile de taifa|concierto bailable|tardeo|fiesta canaria|fiesta joven|noche de kioscos|baile\s+(?:al ritmo|amenizad[oa]s?|a cargo|con))\b([^.\n]{0,180}?)(?=[.]|$|\n)/gi;
 const DIAS_CORTE = /\s+(?:el\s+)?(?:lunes|martes|miércoles|miercoles|jueves|viernes|sábado|sabado|domingo)\b/i;
 
 export interface BaileSinHora {
@@ -402,7 +410,9 @@ export function ventana(texto: string, titulo: string, radio = 600): string {
 // Recintos con nombre propio ("Plaza de San Marcos", "Cancha El Lomo").
 // Sin "Calle" a secas: suele ser callejero ("Calle Tordo"), no recinto.
 // [ \t] y no \s: un salto de línea NO puede formar parte del nombre.
-const RE_LUGAR = /(Plaza[ \t]+(?:de[ \t]+|del[ \t]+)?[^.\n,]{2,40}|Parque[ \t]+[^.\n,]{2,40}|Cancha[ \t]+[^.\n,]{2,40}|Recinto[ \t]+[^.\n,]{2,40}|Auditorio[ \t]+[^.\n,]{2,40}|Teatro[ \t]+[^.\n,]{2,40}|Pabell[oó]n[ \t]+[^.\n,]{2,40}|Polideportivo[ \t]+[^.\n,]{2,40}|Mercado[ \t]+[^.\n,]{2,40}|Iglesia[ \t]+[^.\n,]{2,40}|Ermita[ \t]+[^.\n,]{2,40}|Escenario[ \t]*[^.\n,]{0,40}|Campo[ \t]+[^.\n,]{2,40}|Calle[ \t]+[^.\n,]{2,40}|Casa[ \t]+[^.\n,]{2,40})/gi;
+// Añadidos Atrio/Caserío/Ermita-parroquia (Güímar: "Atrio de San Pedro",
+// "Caserío de El Socorro") y variantes con "de" para Escenario/Campo/Calle/Casa.
+const RE_LUGAR = /(Plaza[ \t]+(?:de[ \t]+|del[ \t]+)?[^.\n,]{2,40}|Parque[ \t]+[^.\n,]{2,40}|Cancha[ \t]+[^.\n,]{2,40}|Recinto[ \t]+[^.\n,]{2,40}|Auditorio[ \t]+[^.\n,]{2,40}|Teatro[ \t]+[^.\n,]{2,40}|Pabell[oó]n[ \t]+[^.\n,]{2,40}|Polideportivo[ \t]+[^.\n,]{2,40}|Mercado[ \t]+[^.\n,]{2,40}|Iglesia[ \t]+[^.\n,]{2,40}|Ermita[ \t]+[^.\n,]{2,40}|Escenario[ \t]*(?:de[ \t]+|del[ \t]+)?[^.\n,]{0,40}|Campo[ \t]+(?:de[ \t]+|del[ \t]+)?[^.\n,]{2,40}|Calle[ \t]+[^.\n,]{2,40}|Casa[ \t]+[^.\n,]{2,40}|Atrio[ \t]+(?:de[ \t]+|del[ \t]+)?[^.\n,]{2,40}|Caser[ií]o[ \t]+(?:de[ \t]+|del[ \t]+)?[^.\n,]{2,40})/gi;
 // "Casco" aparte y SIN /i: con insensible cazaría "casco histórico con la
 // participación..." (minúsculas). Solo vale con nombre propio en mayúscula.
 const RE_LUGAR_CASCO = /(Casco[ \t]+(?:de\s+|del\s+)?[A-ZÁÉÍÓÚÑ][^.\n,]{0,30})/g;
@@ -472,13 +482,14 @@ export interface SeccionDia {
   texto: string;
 }
 
-const HEADER_DIA = /(viernes|s[aá]bado|domingo|lunes|martes|mi[eé]rcoles|jueves)\s*,?\s*(\d{1,2})\b(?!\s*[:.]\d)(?:\s+de\s+([a-záéíóúñ]+))?(?:\s+de\s+(20\d{2}))?/gi;
+const HEADER_DIA = /(viernes|s[aá]bado|domingo|lunes|martes|mi[eé]rcoles|jueves)\s*,?\s*(\d{1,2})\b(?!\s*[:.]\d)(?:\s+de\s+([a-záéíóúñ]+)|\s+([a-záéíóúñ]+))?(?:\s+de\s+(20\d{2}))?/gi;
 // Día primero ("18 Viernes", "26 Sábado", "Lunes 09."): algunos programas
 // (Tacoronte) ordenan al revés y sin mes (lo pone el contexto del doc).
 const HEADER_DIA_INV = /(?<!\d)(\d{1,2})\b(?!\s*[:.]\d)\s+(viernes|s[aá]bado|domingo|lunes|martes|mi[eé]rcoles|jueves)\b/gi;
 // Fecha a inicio de línea ("7 de agosto: ...", "14-15 de agosto: ...").
 // Con ^ anclado: evita tragar rangos y horas en mitad de frase.
-const HEADER_DIA_LINEA = /^(\d{1,2})(?:\s*[–-]\s*(\d{1,2}))?\s+de\s+([a-záéíóúñ]+)/gim;
+// Admite resto del encabezado en la misma línea ("Domingo 30 de agosto 18:30 ...").
+const HEADER_DIA_LINEA = /^(\d{1,2})(?:\s*[–-]\s*(\d{1,2}))?\s+de\s+([a-záéíóúñ]+)(?=[\s:.,–-]|$)/gim;
 // "...hasta el 24 de septiembre" (sin día de semana, con mes obligatorio;
 // \bel\b no traga "del" ni "al ... de").
 // NO parte si es un plazo ("hasta el 10 de septiembre", "inscripción antes del...").
@@ -502,7 +513,11 @@ export function partirPorDias(programa: string, ref?: { mes: string; anyo: strin
   let m: RegExpExecArray | null;
   HEADER_DIA.lastIndex = 0;
   while ((m = HEADER_DIA.exec(programa)) !== null) {
-    headers.push({ dia: parseInt(m[2], 10), mes: m[3] || '', anyo: m[4] || '', index: m.index });
+    // "Jueves 3 septiembre 18:00": la palabra tras el día SOLO es mes si es
+    // un mes válido (no "Domingo 30 aniversario"). Va en m[4] (sin "de").
+    const mesCand = m[4] || '';
+    const mesOk = !mesCand || mesANum(mesCand) !== '';
+    headers.push({ dia: parseInt(m[2], 10), mes: mesOk ? (m[3] || m[4] || '') : '', anyo: mesOk ? (m[5] || '') : '', index: m.index });
   }
   HEADER_DIA_INV.lastIndex = 0;
   while ((m = HEADER_DIA_INV.exec(programa)) !== null) {
@@ -515,8 +530,17 @@ export function partirPorDias(programa: string, ref?: { mes: string; anyo: strin
   }
   HEADER_DIA_LINEA.lastIndex = 0;
   while ((m = HEADER_DIA_LINEA.exec(programa)) !== null) {
-    if (headers.some((h) => Math.abs(h.index - m.index) < 12)) continue;
-    headers.push({ dia: parseInt(m[1], 10), mes: m[3] || '', anyo: '', index: m.index });
+    // El stream del PDF pega cabeceras ("...Domingo 30 de agosto 18:30...");
+    // se busca el inicio real (día de semana previo) hasta 40 chars atrás.
+    let ini = m.index;
+    const pre = programa.slice(Math.max(0, m.index - 40), m.index);
+    const wd = pre.match(/(lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bado|domingo)\s*,?\s*$/i);
+    if (wd && wd.index !== undefined) ini = Math.max(0, m.index - 40) + wd.index;
+    if (headers.some((h) => Math.abs(h.index - ini) < 12)) continue;
+    // Con mes explícito ("30 de agosto") basta 1 mención; sin mes ("Lunes 09")
+    // se evita tragar horas ("13:00 de la tarde" no es día, pero "9 de mayo" sí).
+    if (!m[3] && !pre.match(/(lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bado|domingo)\s*,?\s*$/i)) continue;
+    headers.push({ dia: parseInt(m[1], 10), mes: m[3] || '', anyo: '', index: ini });
   }
   DIA_EL_MES.lastIndex = 0;
   while ((m = DIA_EL_MES.exec(programa)) !== null) {
