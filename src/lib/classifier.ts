@@ -233,7 +233,7 @@ export function extraerOrquestas(titulo: string): string[] {
       // Machine y Samady"). Exige minúscula/marca tras el nombre para no
       // tragar la hora ("Orquesta Revelación. 23:00 + resto").
       // El genérico (mayúscula) cubre el resto.
-      { re: /orquestas?\s+((?:la\s+|el\s+|los\s+|las\s+)?[A-ZÁÉÍÓÚÑ][^.,;]{2,120}?)(?=\s+[a-záéíóúñ(]|\s*\.\s|\s*$|\s+y\s+[A-ZÁÉÍÓÚÑ])/i, coma: 'solo-coma' },
+      { re: /orquestas?\s+((?:la\s+|el\s+|los\s+|las\s+)?[A-ZÁÉÍÓÚÑ][^.,;]{2,120}?)(?=\s+[a-záéíóúñ(,]|\s*,\s*|\s*\.\s|\s*$|\s+y\s+[A-ZÁÉÍÓÚÑ])/i, coma: 'solo-coma' },
       // "Verbena con/a cargo de ... Grupo Pati, Atenia y la Orquesta Olimpia" y
       // "MEGAVERBENAZO ... con ARMONÍA SHOW ..., LEDES DÍAZ, ...".
       // Estos SÍ admiten comas (luego se parte por coma/y).
@@ -296,7 +296,7 @@ export function extraerOrquestas(titulo: string): string[] {
       // También se parte por ·/• ("00:00-1:30 Orquesta Tropin · 1:30 Pepe...").
       const partes = coma === 'solo-coma'
         ? base.split(/\s*,\s*|\s*[·•]\s*/)
-        : base.split(coma ? /\s+y\s+|\s*,\s*|\s*[·•]\s*/ : /\s+y\s+/);
+        : base.split(coma ? /\s+y\s+|\s*,\s*(?:y\s+)?|\s*[·•]\s*/ : /\s+y\s+/);
       partes.forEach(add);
     }
     return orq;
@@ -466,12 +466,13 @@ export function lugarCercano(seccion: string, titulo: string, radio = 400): stri
 
 /** Recorta la prosa pegada tras un recinto ("Plaza Andrés de Lorenzo Cáceres
  *  Gran concierto del cantante" -> "Plaza Andrés de Lorenzo Cáceres").
- *  Regla: pasado el carácter 20, una palabra en mayúscula seguida de
- *  minúscula ya es otro sintagma. Los nombres con artículos interiores
- *  ("Plaza de la Pila", "Cancha El Lomo") no disparan la regla. */
+ *  Regla: pasado el carácter 12, una palabra en mayúscula seguida de
+ *  minúscula (no artículo) ya es otro sintagma. Los nombres con artículos
+ *  interiores ("Plaza de la Pila", "Cancha El Lomo", "Auditorio Municipal
+ *  de Santa Cruz") no disparan la regla. */
 export function recortarProsa(lugar: string): string {
-  const m = lugar.slice(20).search(/\s+[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+\s+(?!de\b|del\b|la\b|el\b|los\b|las\b|y\b|e\b)[a-záéíóúñ]{2,}/);
-  return (m >= 0 ? lugar.slice(0, 20 + m) : lugar).trim();
+  const m = lugar.slice(12).search(/\s+(?:[A-ZÁÉÍÓÚÑ][a-záéíóúñ]*|[A-ZÁÉÍÓÚÑ]{2,})\s+(?!de\b|del\b|la\b|el\b|los\b|las\b|y\b|e\b)[a-záéíóúñ]{2,}/);
+  return (m >= 0 ? lugar.slice(0, 12 + m) : lugar).trim();
 }
 
 // Programas multi-día ("Viernes 11 de septiembre ... Sábado 12 ..."):

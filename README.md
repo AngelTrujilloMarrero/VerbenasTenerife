@@ -17,7 +17,7 @@ de los ayuntamientos (caché 1h por adaptador) y filtra verbenas con patrones.
   marcas de agua: aquí el contenido es propio.
 - Lógica: `src/lib/classifier.ts` (patrones + `partirPorDias` + `tipoDeEvento`),
   adaptadores `src/lib/arona.ts` / `src/lib/adeje.ts` / `src/lib/tegueste.ts`
-  / `src/lib/icodvinos.ts` / `src/lib/lossilos.ts` / `src/lib/buenavista.ts` / `src/lib/laorotava.ts` / `src/lib/losrealejos.ts` / `src/lib/guimar.ts` / `src/lib/candelaria.ts` / `src/lib/elsauzal.ts` / `src/lib/santaursula.ts`, agregador `src/lib/verbenas.ts`, PDFs en `src/lib/pdf.ts` (pdfjs-dist, gratis).
+  / `src/lib/icodvinos.ts` / `src/lib/lossilos.ts` / `src/lib/buenavista.ts` / `src/lib/laorotava.ts` / `src/lib/losrealejos.ts` / `src/lib/guimar.ts` / `src/lib/candelaria.ts` / `src/lib/elsauzal.ts` / `src/lib/santaursula.ts`, agregadores `src/lib/lagenda.ts` / `src/lib/tenerifesevive.ts` / `src/lib/canariasfiestas.ts`, agregador `src/lib/verbenas.ts`, PDFs en `src/lib/pdf.ts` (pdfjs-dist, gratis).
 - Verificación por municipio: primero ¿hay algo nuevo del año vigente? Luego
   ¿en qué formato? PDF con texto → directo; solo imágenes (La Orotava
   galería 7 PNGs, Arico 21 págs) → `programa-imagen` en `/api/estado.json` y OCR
@@ -32,6 +32,8 @@ de los ayuntamientos (caché 1h por adaptador) y filtra verbenas con patrones.
 - Candelaria: WP REST posts cat 41 + mediateca PDF vigente (Agosto-2026). Noticias con programa inline (Nueva Línea). Fotos de programas por pueblo (año en nombre) -> `programa-imagen` si no hay OCR.
 - El Sauzal: WP (REST 401), todo TEXTO web: `/actividad/slug` con ficha DÍA/HORA/LUGAR/ACTUACIONES + noticia del programa. PDFs fiestas escaneados -> aviso. Solo año vigente.
 - Santa Úrsula: WP (REST 401), noticias con fecha visible + programa inline (verbena 11/oct Fórmula Latina). Eventos /evento/ son viajes. Patronales en octubre.
+- TenerifeSeVive (blog WP.com): tabla viva Fecha|Localidad|Tipo|Orquestas vía REST pública (39 filas sep-nov 2026). Cubre barrios sin fuente oficial (Abrigos, Fañabé, Vilaflor...). Agregador último, fusiona con oficial.
+- CanariasFiestas (blog programas): archivo mensual /YYYY/MM/ filtrado a Tenerife por municipio en titular (dos primeras partes; Pájara/Gáldar/Costa Norte vetados). Programas inline día+hora. Agregador último.
 - Tegueste DESCUBRE programas: cada ciclo lee /fiestas/ y procesa los PDF
   "programa+fiestas" que encuentre. Un PDF nuevo en diciembre entra solo.
   PDFs escaneados se avisan y quedan para Fase 2 (IA visión).

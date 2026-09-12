@@ -15,6 +15,8 @@ import { CANDELARIA_URL, obtenerVerbenasCandelaria } from './candelaria.js';
 import { ELSAUZAL_URL, obtenerVerbenasElSauzal } from './elsauzal.js';
 import { SANTAURSULA_URL, obtenerVerbenasSantaUrsula } from './santaursula.js';
 import { LAGENDA_URL, obtenerVerbenasLagenda } from './lagenda.js';
+import { TENERIFESEVIVE_URL, obtenerVerbenasTenerifeSeVive } from './tenerifesevive.js';
+import { CANARIASFIESTAS_URL, obtenerVerbenasCanariasFiestas } from './canariasfiestas.js';
 import { LALAGUNA_URL, obtenerVerbenasLaLaguna } from './lalaguna.js';
 import { SANTACRUZ_URL, obtenerVerbenasSantaCruz } from './santacruz.js';
 import { SANJUANRAMBLA_URL, obtenerVerbenasSanJuanRambla } from './sanjuanrambla.js';
@@ -25,8 +27,9 @@ import { avisar } from './avisos.js';
 import { porFecha, type Fuente, type Verbena } from './types.js';
 
 // Registro de fuentes. Añadir un municipio = 1 línea + su adaptador.
-// Escala a 31 sin tocar API ni página. Lagenda va ÚLTIMA: es agregador y
-// sus duplicados con ayuntamientos se descartan (gana la fuente oficial).
+// Escala a 31 sin tocar API ni página. Los agregadores van ÚLTIMOS (lagenda,
+// tenerifesevive, canariasfiestas): sus duplicados con ayuntamientos se
+// descartan (gana la fuente oficial).
 export const FUENTES: Fuente[] = [
   { id: 'arona', nombre: 'Arona', agendaUrl: ARONA_URL, obtener: obtenerVerbenasArona },
   { id: 'adeje', nombre: 'Adeje', agendaUrl: ADEJE_URL, obtener: obtenerVerbenasAdeje },
@@ -49,7 +52,9 @@ export const FUENTES: Fuente[] = [
   { id: 'candelaria', nombre: 'Candelaria', agendaUrl: CANDELARIA_URL, obtener: obtenerVerbenasCandelaria },
   { id: 'elsauzal', nombre: 'El Sauzal', agendaUrl: ELSAUZAL_URL, obtener: obtenerVerbenasElSauzal },
   { id: 'santaursula', nombre: 'Santa Úrsula', agendaUrl: SANTAURSULA_URL, obtener: obtenerVerbenasSantaUrsula },
-  { id: 'lagenda', nombre: 'Lagenda', agendaUrl: LAGENDA_URL, obtener: obtenerVerbenasLagenda }
+  { id: 'lagenda', nombre: 'Lagenda', agendaUrl: LAGENDA_URL, obtener: obtenerVerbenasLagenda },
+  { id: 'tenerifesevive', nombre: 'TenerifeSeVive', agendaUrl: TENERIFESEVIVE_URL, obtener: obtenerVerbenasTenerifeSeVive },
+  { id: 'canariasfiestas', nombre: 'CanariasFiestas', agendaUrl: CANARIASFIESTAS_URL, obtener: obtenerVerbenasCanariasFiestas }
 ];
 
 export type { Verbena };
