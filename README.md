@@ -1,4 +1,4 @@
-# VerbenasTenerife (piloto: 5 ayuntamientos + lagenda.org)
+# VerbenasTenerife (16 ayuntamientos + lagenda.org)
 
 Astro 7 SSR + scrapers en vivo. Sin BD todavía: cada visita lee las agendas
 de los ayuntamientos (caché 1h por adaptador) y filtra verbenas con patrones.
@@ -6,8 +6,9 @@ de los ayuntamientos (caché 1h por adaptador) y filtra verbenas con patrones.
 - `pnpm dev` → http://localhost:4322/ (listado, `?municipio=arona|adeje`) y
   `/api/verbenas.json` (JSON, `?municipio=` y `?filtro=futuras|pasadas|todas`)
 - La página es shell instantánea (~0.04s): pinta barra de progreso + chips por
-  municipio y carga cada fuente en paralelo (lotes de 4) desde la API,
-  ordenando y separando próximas/celebradas en el navegador.
+  municipio (solo futuras, `0` si fuera de fecha) y carga cada fuente en
+  paralelo (lotes de 4) desde la API, ordenando y separando próximas/celebradas
+  en el navegador.
 - La página replica el formato de DeBelingo (fondo oscuro, cabecera azul→púrpura,
   días amarillos agrupados, tarjetas con borde lateral por tipo, leyenda,
   detalle expandible con Cómo llegar/TITSA/fuente oficial). Orden de más nueva
@@ -17,20 +18,15 @@ de los ayuntamientos (caché 1h por adaptador) y filtra verbenas con patrones.
 - Lógica: `src/lib/classifier.ts` (patrones + `partirPorDias` + `tipoDeEvento`),
   adaptadores `src/lib/arona.ts` / `src/lib/adeje.ts` / `src/lib/tegueste.ts`
   / `src/lib/icodvinos.ts` / `src/lib/lossilos.ts` / `src/lib/buenavista.ts` / `src/lib/laorotava.ts`, agregador `src/lib/verbenas.ts`, PDFs en `src/lib/pdf.ts` (pdfjs-dist, gratis).
-- Icod de los Vinos usa la API REST de su WordPress (`wp-json/wp/v2`: búsqueda
-  server-side + `content.rendered` + mediateca con los programas en PDF del
-  año vigente). Su X (@Icod_Vinos) es muro con login y sin API pública: no
-  integrable sin claves; la web publica lo mismo.
-- Los Silos: web informativa sin agenda estructurada (EventON con datos de
-  prueba; mediateca vacía 2025-26). El adaptador vigila REST + mediateca del
-  año vigente: en cuanto cuelguen fiestadelaluz2026.pdf entra solo. El día a
-  día real va por Facebook (muro con login, sin API pública).
-- Buenavista del Norte: noticias en `/noticias/YYYY/` (REST bloqueado, 401).
-  Descubre por scraping de `/noticias/` y buscador; programas en PDF del año
-  vigente enlazados desde la noticia (Remedios). Futuros entran solos.
-- La Orotava: Drupal 10 sin REST (404), agenda en `/es/agenda` con teaser
-  fecha+título y detalle "Cuándo". Solo año vigente; programa futuro entra
-  solo. Noticias en `/es/noticias`.
+- Verificación por municipio: primero ¿hay algo nuevo del año vigente? Luego
+  ¿en qué formato? PDF con texto → directo; solo imágenes (La Orotava
+  galería 7 PNGs, Arico 21 págs) → `programa-imagen` en `/api/estado.json` y OCR
+  offline en `src/lib/data/ocr-programas.json` (`textoOcr()`); inline en la web
+  → `textoConSaltos`. Futuros entran solos.
+- Icod de los Vinos: WP REST `wp-json/wp/v2` + mediateca PDF año vigente (Drive portada) + inline. X muro con login.
+- Los Silos: web informativa (EventON pruebas, mediateca vacía 25-26). Vigila REST + mediateca vigente; día a día en Facebook muro.
+- Buenavista del Norte: `/noticias/YYYY/` scraping (REST 401). PDFs vigentes enlazados desde noticia (Remedios).
+- La Orotava: Drupal 10 sin REST, agenda `/es/agenda`. Programa 2026 solo como galería PNG (OCR La Luz 05-09 y 12-09 Maquinaria Band este finde); futuros igual.
 - Tegueste DESCUBRE programas: cada ciclo lee /fiestas/ y procesa los PDF
   "programa+fiestas" que encuentre. Un PDF nuevo en diciembre entra solo.
   PDFs escaneados se avisan y quedan para Fase 2 (IA visión).
@@ -47,9 +43,7 @@ de los ayuntamientos (caché 1h por adaptador) y filtra verbenas con patrones.
   los archives estáticos de DeBelingo). Mencionar una suma +5. Purgados
   topónimos y genéricos ("Tenerife", "Calle", "Sergio"...) para no crear FPs.
 
-Estado: 48 eventos en 10 municipios (Santa Cruz 13 del blog + programas
-fijos; 28 futuras). Santa Cruz: días flexibles, bailes sin hora con hora
-previa, penalty religioso solo sin mención explícita, dedup general con fusión.
+Estado: ~52 eventos en 13 municipios (Icod 5, La Orotava 12-09 Maquinaria Band este finde, etc.; ~30 futuras). Santa Cruz: días flexibles, bailes sin hora con hora previa, penalty religioso solo sin mención explícita, dedup general con fusión. Chips y `pie-total` ya cuentan solo futuras.
 - Exportar agenda: botón 📥 genera PNG de la semana (ayer→domingo) con
   html2canvas vía importmap CDN (`esm.sh`, sin bundlear) + modal
   Compartir/Descargar (adaptado de DeBelingo, sin Firebase).
