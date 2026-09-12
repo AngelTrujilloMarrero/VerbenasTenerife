@@ -18,7 +18,8 @@ export const COORDS: Record<string, { lat: number; lon: number }> = {
   laorotava: { lat: 28.3905, lon: -16.5233 },
   losrealejos: { lat: 28.3804, lon: -16.5796 },
   guimar: { lat: 28.3156, lon: -16.4137 },
-  candelaria: { lat: 28.3548, lon: -16.3716 }
+  candelaria: { lat: 28.3548, lon: -16.3716 },
+  elsauzal: { lat: 28.4781, lon: -16.4357 }
 };
 
 export function coordsDe(municipio: string): { lat: number; lon: number } | null {

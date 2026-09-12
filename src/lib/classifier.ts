@@ -230,8 +230,10 @@ export function extraerOrquestas(titulo: string): string[] {
     // ("Orquesta La Sabrosa y Nueva Línea" es UNA orquesta, no dos).
     const patrones: { re: RegExp; coma: boolean | 'solo-coma' }[] = [
       // Preciso: "Orquesta(s) X..." + resto ("Orquestas Kimbara, The Boys
-      // Machine y Samady"). El genérico (mayúscula) cubre el resto.
-      { re: /orquestas?\s+((?:la\s+|el\s+|los\s+|las\s+)?[A-ZÁÉÍÓÚÑ][^.,;]{2,120})/i, coma: 'solo-coma' },
+      // Machine y Samady"). Exige minúscula/marca tras el nombre para no
+      // tragar la hora ("Orquesta Revelación. 23:00 + resto").
+      // El genérico (mayúscula) cubre el resto.
+      { re: /orquestas?\s+((?:la\s+|el\s+|los\s+|las\s+)?[A-ZÁÉÍÓÚÑ][^.,;]{2,120}?)(?=\s+[a-záéíóúñ(]|\s*\.\s|\s*$|\s+y\s+[A-ZÁÉÍÓÚÑ])/i, coma: 'solo-coma' },
       // "Verbena con/a cargo de ... Grupo Pati, Atenia y la Orquesta Olimpia" y
       // "MEGAVERBENAZO ... con ARMONÍA SHOW ..., LEDES DÍAZ, ...".
       // Estos SÍ admiten comas (luego se parte por coma/y).

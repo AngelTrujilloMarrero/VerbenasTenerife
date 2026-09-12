@@ -12,6 +12,7 @@ import { LAOROTAVA_URL, obtenerVerbenasLaOrotava } from './laorotava.js';
 import { LOSREALEJOS_URL, obtenerVerbenasLosRealejos } from './losrealejos.js';
 import { GUIMAR_URL, obtenerVerbenasGuimar } from './guimar.js';
 import { CANDELARIA_URL, obtenerVerbenasCandelaria } from './candelaria.js';
+import { ELSAUZAL_URL, obtenerVerbenasElSauzal } from './elsauzal.js';
 import { LAGENDA_URL, obtenerVerbenasLagenda } from './lagenda.js';
 import { LALAGUNA_URL, obtenerVerbenasLaLaguna } from './lalaguna.js';
 import { SANTACRUZ_URL, obtenerVerbenasSantaCruz } from './santacruz.js';
@@ -45,6 +46,7 @@ export const FUENTES: Fuente[] = [
   { id: 'losrealejos', nombre: 'Los Realejos', agendaUrl: LOSREALEJOS_URL, obtener: obtenerVerbenasLosRealejos },
   { id: 'guimar', nombre: 'Güímar', agendaUrl: GUIMAR_URL, obtener: obtenerVerbenasGuimar },
   { id: 'candelaria', nombre: 'Candelaria', agendaUrl: CANDELARIA_URL, obtener: obtenerVerbenasCandelaria },
+  { id: 'elsauzal', nombre: 'El Sauzal', agendaUrl: ELSAUZAL_URL, obtener: obtenerVerbenasElSauzal },
   { id: 'lagenda', nombre: 'Lagenda', agendaUrl: LAGENDA_URL, obtener: obtenerVerbenasLagenda }
 ];
 
