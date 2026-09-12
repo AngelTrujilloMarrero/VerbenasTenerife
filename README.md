@@ -17,7 +17,7 @@ de los ayuntamientos (caché 1h por adaptador) y filtra verbenas con patrones.
   marcas de agua: aquí el contenido es propio.
 - Lógica: `src/lib/classifier.ts` (patrones + `partirPorDias` + `tipoDeEvento`),
   adaptadores `src/lib/arona.ts` / `src/lib/adeje.ts` / `src/lib/tegueste.ts`
-  / `src/lib/icodvinos.ts` / `src/lib/lossilos.ts` / `src/lib/buenavista.ts` / `src/lib/laorotava.ts`, agregador `src/lib/verbenas.ts`, PDFs en `src/lib/pdf.ts` (pdfjs-dist, gratis).
+  / `src/lib/icodvinos.ts` / `src/lib/lossilos.ts` / `src/lib/buenavista.ts` / `src/lib/laorotava.ts` / `src/lib/losrealejos.ts`, agregador `src/lib/verbenas.ts`, PDFs en `src/lib/pdf.ts` (pdfjs-dist, gratis).
 - Verificación por municipio: primero ¿hay algo nuevo del año vigente? Luego
   ¿en qué formato? PDF con texto → directo; solo imágenes (La Orotava
   galería 7 PNGs, Arico 21 págs) → `programa-imagen` en `/api/estado.json` y OCR
@@ -27,6 +27,7 @@ de los ayuntamientos (caché 1h por adaptador) y filtra verbenas con patrones.
 - Los Silos: web informativa (EventON pruebas, mediateca vacía 25-26). Vigila REST + mediateca vigente; día a día en Facebook muro.
 - Buenavista del Norte: `/noticias/YYYY/` scraping (REST 401). PDFs vigentes enlazados desde noticia (Remedios).
 - La Orotava: Drupal 10 sin REST, agenda `/es/agenda`. Programa 2026 solo como galería PNG (OCR La Luz 05-09 y 12-09 Maquinaria Band este finde); futuros igual.
+- Los Realejos: WP REST `wp-json/wp/v2` posts + mediateca PDF año vigente (Carmen, Mayo). Formato programa: día + `» 21:00 horas – Plaza X`.
 - Tegueste DESCUBRE programas: cada ciclo lee /fiestas/ y procesa los PDF
   "programa+fiestas" que encuentre. Un PDF nuevo en diciembre entra solo.
   PDFs escaneados se avisan y quedan para Fase 2 (IA visión).
