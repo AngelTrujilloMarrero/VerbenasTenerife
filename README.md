@@ -16,7 +16,7 @@ de los ayuntamientos (caché 1h por adaptador) y filtra verbenas con patrones.
   marcas de agua: aquí el contenido es propio.
 - Lógica: `src/lib/classifier.ts` (patrones + `partirPorDias` + `tipoDeEvento`),
   adaptadores `src/lib/arona.ts` / `src/lib/adeje.ts` / `src/lib/tegueste.ts`
-  / `src/lib/icodvinos.ts` / `src/lib/lossilos.ts` / `src/lib/buenavista.ts`, agregador `src/lib/verbenas.ts`, PDFs en `src/lib/pdf.ts` (pdfjs-dist, gratis).
+  / `src/lib/icodvinos.ts` / `src/lib/lossilos.ts` / `src/lib/buenavista.ts` / `src/lib/laorotava.ts`, agregador `src/lib/verbenas.ts`, PDFs en `src/lib/pdf.ts` (pdfjs-dist, gratis).
 - Icod de los Vinos usa la API REST de su WordPress (`wp-json/wp/v2`: búsqueda
   server-side + `content.rendered` + mediateca con los programas en PDF del
   año vigente). Su X (@Icod_Vinos) es muro con login y sin API pública: no
@@ -28,6 +28,9 @@ de los ayuntamientos (caché 1h por adaptador) y filtra verbenas con patrones.
 - Buenavista del Norte: noticias en `/noticias/YYYY/` (REST bloqueado, 401).
   Descubre por scraping de `/noticias/` y buscador; programas en PDF del año
   vigente enlazados desde la noticia (Remedios). Futuros entran solos.
+- La Orotava: Drupal 10 sin REST (404), agenda en `/es/agenda` con teaser
+  fecha+título y detalle "Cuándo". Solo año vigente; programa futuro entra
+  solo. Noticias en `/es/noticias`.
 - Tegueste DESCUBRE programas: cada ciclo lee /fiestas/ y procesa los PDF
   "programa+fiestas" que encuentre. Un PDF nuevo en diciembre entra solo.
   PDFs escaneados se avisan y quedan para Fase 2 (IA visión).

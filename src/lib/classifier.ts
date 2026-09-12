@@ -10,7 +10,7 @@ export interface ScoredEvent {
   esVerbena: boolean;
 }
 
-const TITULO_POS = /\b(baile|gran baile|verbena|verbenazo|megaverbena|tardeo|concierto bailable|noche latina|noche boricua|noche de kiosc?os|baile de magos|romer[ií]a|orquesta|tributo|studio 54)\b/i;
+const TITULO_POS = /\b(baile|gran baile|verbena|verbenas|verbenazo|megaverbena|tardeo|concierto bailable|noche latina|noche boricua|noche de kiosc?os|baile de magos|romer[ií]a|orquesta|tributo|studio 54)\b/i;
 const DESC_POS = /amenizado por|amenizan|orquestas?\s*:|orquestas?\s+[A-ZÁÉÍÓÚÑ]|gran baile|noche latina/i;
 const HORA_NOCTURNA = /(19|2[0-3]|21):\d{2}/;
 
@@ -303,7 +303,7 @@ export function extraerOrquestas(titulo: string): string[] {
 // (>=4) sigue filtrando (una fiesta canaria solo folclórica no puntúa).
 const TIENE_MUSICA = /orquesta|grupo|banda|dj|parranda|\bson\b|tributo|latin|band\b/i;
 const EN_PASADO = /\b(fue|fueron|tuvo|hubo|han sido|se celebró|fueron un éxito)\b/i;
-const LINEA_SIN_HORA = /(?:((?:fiesta|gran fiesta|fiesta joven)\s+y\s+))?(gran baile|baile popular|verbena|baile de magos|baile de taifa|concierto bailable|tardeo|fiesta canaria|noche de kioscos|baile\s+(?:al ritmo|amenizad[oa]s?|a cargo))\b([^.\n]{0,180}?)(?=[.]|$|\n)/gi;
+const LINEA_SIN_HORA = /(?:((?:fiesta|gran fiesta|fiesta joven)\s+y\s+))?(gran baile|baile popular|verbena|verbenas|baile de magos|baile de taifa|concierto bailable|tardeo|fiesta canaria|noche de kioscos|baile\s+(?:al ritmo|amenizad[oa]s?|a cargo))\b([^.\n]{0,180}?)(?=[.]|$|\n)/gi;
 const DIAS_CORTE = /\s+(?:el\s+)?(?:lunes|martes|miércoles|miercoles|jueves|viernes|sábado|sabado|domingo)\b/i;
 
 export interface BaileSinHora {

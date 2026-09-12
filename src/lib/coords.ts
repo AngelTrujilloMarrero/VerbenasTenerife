@@ -14,7 +14,8 @@ export const COORDS: Record<string, { lat: number; lon: number }> = {
   icoddelosvinos: { lat: 28.3679, lon: -16.7195 },
   lossilos: { lat: 28.3641, lon: -16.8139 },
   buenavista: { lat: 28.3725, lon: -16.8492 },
-  buenavistadelnorte: { lat: 28.3725, lon: -16.8492 }
+  buenavistadelnorte: { lat: 28.3725, lon: -16.8492 },
+  laorotava: { lat: 28.3905, lon: -16.5233 }
 };
 
 export function coordsDe(municipio: string): { lat: number; lon: number } | null {
