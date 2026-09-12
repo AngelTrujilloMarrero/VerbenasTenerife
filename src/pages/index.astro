@@ -363,8 +363,9 @@ const fuentes = (filtro
         const d = await r.json();
         if (d.hoy) { $('badge-hoy').textContent = d.hoy; $('pie-hoy').textContent = d.hoy; }
         todas.push(...(d.verbenas || []));
+        const nFut = (d.verbenas || []).filter((v) => v.futura).length;
         chips[f.id].className = 'chip ok';
-        chips[f.id].textContent = `✓ ${f.nombre} (${(d.verbenas || []).length})`;
+        chips[f.id].textContent = `✓ ${f.nombre} (${nFut})`;
         const porMuni = {};
         (d.verbenas || []).filter((v) => v.futura).forEach((v) => {
           (porMuni[v.municipio] = porMuni[v.municipio] || []).push(v.day);

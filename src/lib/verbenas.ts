@@ -5,6 +5,9 @@ import { ELROSARIO_URL, obtenerVerbenasElRosario } from './elrosario.js';
 import { FASNIA_URL, obtenerVerbenasFasnia } from './fasnia.js';
 import { GRANADILLA_URL, obtenerVerbenasGranadilla } from './granadilla.js';
 import { GUIADEISORA_URL, obtenerVerbenasGuiaDeIsora } from './guiadeisora.js';
+import { ICODVINOS_URL, obtenerVerbenasIcodVinos } from './icodvinos.js';
+import { LOSSILOS_URL, obtenerVerbenasLosSilos } from './lossilos.js';
+import { BUENAVISTA_URL, obtenerVerbenasBuenavista } from './buenavista.js';
 import { LAGENDA_URL, obtenerVerbenasLagenda } from './lagenda.js';
 import { LALAGUNA_URL, obtenerVerbenasLaLaguna } from './lalaguna.js';
 import { SANTACRUZ_URL, obtenerVerbenasSantaCruz } from './santacruz.js';
@@ -31,6 +34,9 @@ export const FUENTES: Fuente[] = [
   { id: 'fasnia', nombre: 'Fasnia', agendaUrl: FASNIA_URL, obtener: obtenerVerbenasFasnia },
   { id: 'tacoronte', nombre: 'Tacoronte', agendaUrl: TACORONTE_URL, obtener: obtenerVerbenasTacoronte },
   { id: 'sanjuanrambla', nombre: 'San Juan de la Rambla', agendaUrl: SANJUANRAMBLA_URL, obtener: obtenerVerbenasSanJuanRambla },
+  { id: 'icodvinos', nombre: 'Icod de los Vinos', agendaUrl: ICODVINOS_URL, obtener: obtenerVerbenasIcodVinos },
+  { id: 'lossilos', nombre: 'Los Silos', agendaUrl: LOSSILOS_URL, obtener: obtenerVerbenasLosSilos },
+  { id: 'buenavista', nombre: 'Buenavista del Norte', agendaUrl: BUENAVISTA_URL, obtener: obtenerVerbenasBuenavista },
   { id: 'lagenda', nombre: 'Lagenda', agendaUrl: LAGENDA_URL, obtener: obtenerVerbenasLagenda }
 ];
 

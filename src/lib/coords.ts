@@ -10,7 +10,11 @@ export const COORDS: Record<string, { lat: number; lon: number }> = {
   arico: { lat: 28.1833, lon: -16.4667 },
   fasnia: { lat: 28.2398, lon: -16.4243 },
   tacoronte: { lat: 28.4787, lon: -16.4119 },
-  sanjuandelarambla: { lat: 28.3947, lon: -16.6486 }
+  sanjuandelarambla: { lat: 28.3947, lon: -16.6486 },
+  icoddelosvinos: { lat: 28.3679, lon: -16.7195 },
+  lossilos: { lat: 28.3641, lon: -16.8139 },
+  buenavista: { lat: 28.3725, lon: -16.8492 },
+  buenavistadelnorte: { lat: 28.3725, lon: -16.8492 }
 };
 
 export function coordsDe(municipio: string): { lat: number; lon: number } | null {

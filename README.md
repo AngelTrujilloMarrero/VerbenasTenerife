@@ -15,8 +15,19 @@ de los ayuntamientos (caché 1h por adaptador) y filtra verbenas con patrones.
   se inyectan por JS (con scope no les aplica el CSS). Sin honeypots ni
   marcas de agua: aquí el contenido es propio.
 - Lógica: `src/lib/classifier.ts` (patrones + `partirPorDias` + `tipoDeEvento`),
-  adaptadores `src/lib/arona.ts` / `src/lib/adeje.ts` / `src/lib/tegueste.ts`,
-  agregador `src/lib/verbenas.ts`, PDFs en `src/lib/pdf.ts` (pdfjs-dist, gratis).
+  adaptadores `src/lib/arona.ts` / `src/lib/adeje.ts` / `src/lib/tegueste.ts`
+  / `src/lib/icodvinos.ts` / `src/lib/lossilos.ts` / `src/lib/buenavista.ts`, agregador `src/lib/verbenas.ts`, PDFs en `src/lib/pdf.ts` (pdfjs-dist, gratis).
+- Icod de los Vinos usa la API REST de su WordPress (`wp-json/wp/v2`: búsqueda
+  server-side + `content.rendered` + mediateca con los programas en PDF del
+  año vigente). Su X (@Icod_Vinos) es muro con login y sin API pública: no
+  integrable sin claves; la web publica lo mismo.
+- Los Silos: web informativa sin agenda estructurada (EventON con datos de
+  prueba; mediateca vacía 2025-26). El adaptador vigila REST + mediateca del
+  año vigente: en cuanto cuelguen fiestadelaluz2026.pdf entra solo. El día a
+  día real va por Facebook (muro con login, sin API pública).
+- Buenavista del Norte: noticias en `/noticias/YYYY/` (REST bloqueado, 401).
+  Descubre por scraping de `/noticias/` y buscador; programas en PDF del año
+  vigente enlazados desde la noticia (Remedios). Futuros entran solos.
 - Tegueste DESCUBRE programas: cada ciclo lee /fiestas/ y procesa los PDF
   "programa+fiestas" que encuentre. Un PDF nuevo en diciembre entra solo.
   PDFs escaneados se avisan y quedan para Fase 2 (IA visión).

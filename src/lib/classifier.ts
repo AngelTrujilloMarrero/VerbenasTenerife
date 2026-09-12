@@ -10,7 +10,7 @@ export interface ScoredEvent {
   esVerbena: boolean;
 }
 
-const TITULO_POS = /\b(baile|gran baile|verbena|verbenazo|megaverbena|tardeo|concierto bailable|noche latina|noche boricua|baile de magos|romer[ií]a|orquesta|tributo|studio 54)\b/i;
+const TITULO_POS = /\b(baile|gran baile|verbena|verbenazo|megaverbena|tardeo|concierto bailable|noche latina|noche boricua|noche de kiosc?os|baile de magos|romer[ií]a|orquesta|tributo|studio 54)\b/i;
 const DESC_POS = /amenizado por|amenizan|orquestas?\s*:|orquestas?\s+[A-ZÁÉÍÓÚÑ]|gran baile|noche latina/i;
 const HORA_NOCTURNA = /(19|2[0-3]|21):\d{2}/;
 
@@ -234,7 +234,12 @@ export function extraerOrquestas(titulo: string): string[] {
       // El genérico exige mayúscula inicial SIN /i para no tragar frases.
       { re: /verbena\s+(?:con|a\s+cargo\s+de)\s+(?:la\s+actuaci[oó]n(?:es)?\s+de\s+|las\s+actuaciones\s+de\s+)?([^.;]{3,160})/i, coma: true },
       { re: /(?:ameniza|anima)(?:do|da|dos|das)\s+por\s+([^.;]{3,160})/i, coma: true },
-      { re: /\bcon\s+(?:las?\s+|los\s+|el\s+|la\s+)?(?:la\s+actuaci[oó]n(?:es)?\s+de\s+|las\s+actuaciones\s+de\s+)?(?:orquestas?\s*:?\s*)?([A-ZÁÉÍÓÚÑ][^.;]{3,160})/, coma: true }
+      // "Noche de kioscos con las actuaciones de (la) ORQUESTA TEYMAR, ...":
+      // con artículo intercalado ("de la ORQUESTA") o solo DJs ("de la DJ
+      // BELÉN JURADO, ..."). Exige marca musical en la captura para no traer
+      // escuelas/talleres ("actuación de la Escuela de Folclore").
+      { re: /actuaciones?\s+de\s+(?:la\s+|las\s+|los\s+|el\s+)?(?=[^.;]{0,60}(?:orquesta|grupo|banda|\bdj\b|parranda|tributo))([^.;]{3,160})/i, coma: true },
+      { re: /\bcon\s+(?:las?\s+|los\s+|el\s+|la\s+)?(?:la\s+actuaci[oó]n(?:es)?\s+de\s+|las\s+actuaciones\s+de\s+)?(?:(?:la\s+|las\s+|los\s+|el\s+)?orquestas?\s*:?\s*)?([A-ZÁÉÍÓÚÑ][^.;]{3,160})/, coma: true }
     ];
     const limpia = (s: string): string => {
       // Fuera paréntesis ("(taller de salsa...)", "(tributo a ...)") y comillas
@@ -292,9 +297,13 @@ export function extraerOrquestas(titulo: string): string[] {
 // dos niveles: CON música (orquesta/grupo/banda/dj...) y mención EXPLÍCITA
 // ("Fiesta Joven y Verbena") aunque no nombre artista. Se excluyen crónicas
 // en pasado ("la verbena fue un éxito").
+// Ampliado con marcas locales verificadas: "tardeo" (genérico), "fiesta
+// canaria" (Icod: cierra con orquestas) y "noche de kioscos" (Icod: noches
+// de verbena con orquesta+DJs). La extracción solo propone; el clasificador
+// (>=4) sigue filtrando (una fiesta canaria solo folclórica no puntúa).
 const TIENE_MUSICA = /orquesta|grupo|banda|dj|parranda|\bson\b|tributo|latin|band\b/i;
 const EN_PASADO = /\b(fue|fueron|tuvo|hubo|han sido|se celebró|fueron un éxito)\b/i;
-const LINEA_SIN_HORA = /(?:((?:fiesta|gran fiesta|fiesta joven)\s+y\s+))?(gran baile|baile popular|verbena|baile de magos|baile de taifa|concierto bailable|baile\s+(?:al ritmo|amenizad[oa]s?|a cargo))\b([^.\n]{0,180}?)(?=[.]|$|\n)/gi;
+const LINEA_SIN_HORA = /(?:((?:fiesta|gran fiesta|fiesta joven)\s+y\s+))?(gran baile|baile popular|verbena|baile de magos|baile de taifa|concierto bailable|tardeo|fiesta canaria|noche de kioscos|baile\s+(?:al ritmo|amenizad[oa]s?|a cargo))\b([^.\n]{0,180}?)(?=[.]|$|\n)/gi;
 const DIAS_CORTE = /\s+(?:el\s+)?(?:lunes|martes|miércoles|miercoles|jueves|viernes|sábado|sabado|domingo)\b/i;
 
 export interface BaileSinHora {
@@ -393,13 +402,17 @@ export function ventana(texto: string, titulo: string, radio = 600): string {
 // Recintos con nombre propio ("Plaza de San Marcos", "Cancha El Lomo").
 // Sin "Calle" a secas: suele ser callejero ("Calle Tordo"), no recinto.
 // [ \t] y no \s: un salto de línea NO puede formar parte del nombre.
-const RE_LUGAR = /(Plaza[ \t]+(?:de[ \t]+|del[ \t]+)?[^.\n,]{2,40}|Parque[ \t]+[^.\n,]{2,40}|Cancha[ \t]+[^.\n,]{2,40}|Recinto[ \t]+[^.\n,]{2,40}|Auditorio[ \t]+[^.\n,]{2,40}|Teatro[ \t]+[^.\n,]{2,40}|Pabell[oó]n[ \t]+[^.\n,]{2,40}|Polideportivo[ \t]+[^.\n,]{2,40}|Mercado[ \t]+[^.\n,]{2,40}|Iglesia[ \t]+[^.\n,]{2,40}|Ermita[ \t]+[^.\n,]{2,40})/gi;
+const RE_LUGAR = /(Plaza[ \t]+(?:de[ \t]+|del[ \t]+)?[^.\n,]{2,40}|Parque[ \t]+[^.\n,]{2,40}|Cancha[ \t]+[^.\n,]{2,40}|Recinto[ \t]+[^.\n,]{2,40}|Auditorio[ \t]+[^.\n,]{2,40}|Teatro[ \t]+[^.\n,]{2,40}|Pabell[oó]n[ \t]+[^.\n,]{2,40}|Polideportivo[ \t]+[^.\n,]{2,40}|Mercado[ \t]+[^.\n,]{2,40}|Iglesia[ \t]+[^.\n,]{2,40}|Ermita[ \t]+[^.\n,]{2,40}|Escenario[ \t]*[^.\n,]{0,40}|Campo[ \t]+[^.\n,]{2,40}|Calle[ \t]+[^.\n,]{2,40}|Casa[ \t]+[^.\n,]{2,40})/gi;
 // "Casco" aparte y SIN /i: con insensible cazaría "casco histórico con la
 // participación..." (minúsculas). Solo vale con nombre propio en mayúscula.
 const RE_LUGAR_CASCO = /(Casco[ \t]+(?:de\s+|del\s+)?[A-ZÁÉÍÓÚÑ][^.\n,]{0,30})/g;
 
 // Rutas, no recintos ("procesión desde la iglesia hasta el muelle").
 const RE_LUGAR_MALO = /\b(hasta|desde|hacia|recorrido|trayecto|salida|llegada|acompa\w*|itinerario|recorrido)\b/i;
+
+// El recinto debe llevar nombre propio en mayúscula ("Plaza Andrés", "Plaza
+// de la Pila"); si no caza prosa ("llenar la plaza de carcajadas").
+const RE_LUGAR_PROPIO = /^\S+\s+(?:de\s+|del\s+)?(?:la\s+|el\s+|los\s+|las\s+)?[A-ZÁÉÍÓÚÑ]/;
 
 /** Último recinto válido mencionado antes del título (el más cercano a la línea). */
 export function lugarCercano(seccion: string, titulo: string, radio = 400): string {
@@ -412,7 +425,7 @@ export function lugarCercano(seccion: string, titulo: string, radio = 400): stri
     re.lastIndex = 0;
     while ((m = re.exec(prev)) !== null) {
       const cand = m[1].trim();
-      if (!RE_LUGAR_MALO.test(cand) && m.index >= ultimoIdx) {
+      if (!RE_LUGAR_MALO.test(cand) && RE_LUGAR_PROPIO.test(cand) && m.index >= ultimoIdx) {
         ultimo = cand;
         ultimoIdx = m.index;
       }
@@ -421,6 +434,12 @@ export function lugarCercano(seccion: string, titulo: string, radio = 400): stri
   considera(RE_LUGAR);
   considera(RE_LUGAR_CASCO);
   if (ultimo) {
+    // Corta la hora pegada del stream del PDF ("Plaza Andrés de Lorenzo
+    // Cáceres 13:30h – ..."): un recinto nunca termina en hora.
+    ultimo = ultimo.replace(/\s+\d{1,2}:\d{2}h?\b.*$/, '').trim();
+    // Corta la prosa pegada ("...Cáceres Gran concierto del cantante..."):
+    // a partir de 20 caracteres, "Mayúscula minúscula" ya no es el nombre.
+    ultimo = recortarProsa(ultimo);
     // Colapsa cabeceras repetidas del PDF ("Plaza del Cristo de Tacoronte
     // Plaza del Cristo de" -> "Plaza del Cristo de Tacoronte").
     const head = ultimo.match(/^\w+/)?.[0] || '';
@@ -431,6 +450,16 @@ export function lugarCercano(seccion: string, titulo: string, radio = 400): stri
     }
   }
   return ultimo;
+}
+
+/** Recorta la prosa pegada tras un recinto ("Plaza Andrés de Lorenzo Cáceres
+ *  Gran concierto del cantante" -> "Plaza Andrés de Lorenzo Cáceres").
+ *  Regla: pasado el carácter 20, una palabra en mayúscula seguida de
+ *  minúscula ya es otro sintagma. Los nombres con artículos interiores
+ *  ("Plaza de la Pila", "Cancha El Lomo") no disparan la regla. */
+export function recortarProsa(lugar: string): string {
+  const m = lugar.slice(20).search(/\s+[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+\s+(?!de\b|del\b|la\b|el\b|los\b|las\b|y\b|e\b)[a-záéíóúñ]{2,}/);
+  return (m >= 0 ? lugar.slice(0, 20 + m) : lugar).trim();
 }
 
 // Programas multi-día ("Viernes 11 de septiembre ... Sábado 12 ..."):
