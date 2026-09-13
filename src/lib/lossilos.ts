@@ -20,6 +20,7 @@ import type { Verbena } from './types.js';
 
 // Los Silos: WordPress + EventON (ajde_events) pero el calendario está
 // abandonado (último programa útil fiestadelaluz2024.pdf, 2025-26 sin media).
+// Web obsoleta: ver plan de fuentes alternativas en vilaflor.ts.
 // La web real es informativa (/fiestas-2/ es calendario genérico sin año) y
 // el día a día va por Facebook (muro con login, sin API pública). El adaptador
 // queda en modo VIGENTE (solo año en curso): busca posts vía REST y PDFs en

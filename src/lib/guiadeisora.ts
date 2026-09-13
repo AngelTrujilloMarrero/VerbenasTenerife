@@ -26,6 +26,8 @@ interface EoEv { title?: string; start?: string; url?: string }
  * Calendario Event Organiser vía su endpoint AJAX (la página "Cargando…"
  * no trae nada en el HTML). Rango hoy → +60 días.
  * Documentado para reutilizar en otros WordPress con Event Organiser.
+ * NOTA: web obsoleta (vive de agregadores); ver plan de fuentes
+ * alternativas en vilaflor.ts.
  */
 async function eventosEO(): Promise<EoEv[]> {
   const f = (d: Date) => d.toISOString().slice(0, 10);

@@ -23,6 +23,7 @@ import { ELTANQUE_URL, obtenerVerbenasElTanque } from './eltanque.js';
 import { GARACHICO_URL, obtenerVerbenasGarachico } from './garachico.js';
 import { PUERTOCRUZ_URL, obtenerVerbenasPuertoCruz } from './puertocruz.js';
 import { SANTIAGO_URL, obtenerVerbenasSantiago } from './santiago.js';
+import { VILAFLOR_URL, obtenerVerbenasVilaflor } from './vilaflor.js';
 import { LAGENDA_URL, obtenerVerbenasLagenda } from './lagenda.js';
 import { TENERIFESEVIVE_URL, obtenerVerbenasTenerifeSeVive } from './tenerifesevive.js';
 import { CANARIASFIESTAS_URL, obtenerVerbenasCanariasFiestas } from './canariasfiestas.js';
@@ -70,6 +71,9 @@ export const FUENTES: Fuente[] = [
   { id: 'garachico', nombre: 'Garachico', agendaUrl: GARACHICO_URL, obtener: obtenerVerbenasGarachico },
   { id: 'puertocruz', nombre: 'Puerto de la Cruz', agendaUrl: PUERTOCRUZ_URL, obtener: obtenerVerbenasPuertoCruz },
   { id: 'santiago', nombre: 'Santiago del Teide', agendaUrl: SANTIAGO_URL, obtener: obtenerVerbenasSantiago },
+  // Vilaflor (y en la práctica Guía y Los Silos): webs obsoletas, viven de
+  // agregadores; queda el gancho para fuentes alternativas.
+  { id: 'vilaflor', nombre: 'Vilaflor', agendaUrl: VILAFLOR_URL, obtener: obtenerVerbenasVilaflor },
   { id: 'lagenda', nombre: 'Lagenda', agendaUrl: LAGENDA_URL, obtener: obtenerVerbenasLagenda },
   { id: 'tenerifesevive', nombre: 'TenerifeSeVive', agendaUrl: TENERIFESEVIVE_URL, obtener: obtenerVerbenasTenerifeSeVive },
   { id: 'canariasfiestas', nombre: 'CanariasFiestas', agendaUrl: CANARIASFIESTAS_URL, obtener: obtenerVerbenasCanariasFiestas }

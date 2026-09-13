@@ -29,7 +29,8 @@ export const COORDS: Record<string, { lat: number; lon: number }> = {
   eltanque: { lat: 28.2147, lon: -16.7713 },
   garachico: { lat: 28.3727, lon: -16.6526 },
   puertocruz: { lat: 28.4166, lon: -16.5477 },
-  santiago: { lat: 28.2949, lon: -16.8614 }
+  santiago: { lat: 28.2949, lon: -16.8614 },
+  vilaflor: { lat: 28.1597, lon: -16.6376 }
 };
 
 export function coordsDe(municipio: string): { lat: number; lon: number } | null {

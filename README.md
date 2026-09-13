@@ -1,4 +1,4 @@
-# VerbenasTenerife (30 ayuntamientos + 3 agregadores)
+# VerbenasTenerife (31 ayuntamientos + 3 agregadores)
 
 Astro 7 SSR + scrapers en vivo. Sin BD todavía: cada visita lee las agendas
 de los ayuntamientos (caché 1h por adaptador) y filtra verbenas con patrones.
@@ -17,7 +17,7 @@ de los ayuntamientos (caché 1h por adaptador) y filtra verbenas con patrones.
   marcas de agua: aquí el contenido es propio.
 - Lógica: `src/lib/classifier.ts` (patrones + `partirPorDias` + `tipoDeEvento`),
   adaptadores `src/lib/arona.ts` / `src/lib/adeje.ts` / `src/lib/tegueste.ts`
-  / `src/lib/icodvinos.ts` / `src/lib/lossilos.ts` / `src/lib/buenavista.ts` / `src/lib/laorotava.ts` / `src/lib/losrealejos.ts` / `src/lib/guimar.ts` / `src/lib/candelaria.ts` / `src/lib/elsauzal.ts` / `src/lib/santaursula.ts`     / `src/lib/lamatanza.ts` / `src/lib/lavictoria.ts` / `src/lib/laguancha.ts` / `src/lib/sanmiguel.ts` / `src/lib/arafo.ts` / `src/lib/eltanque.ts` / `src/lib/garachico.ts` / `src/lib/puertocruz.ts` / `src/lib/santiago.ts`, agregadores `src/lib/lagenda.ts` / `src/lib/tenerifesevive.ts` / `src/lib/canariasfiestas.ts`, agregador `src/lib/verbenas.ts`, PDFs en `src/lib/pdf.ts` (pdfjs-dist, gratis).
+  / `src/lib/icodvinos.ts` / `src/lib/lossilos.ts` / `src/lib/buenavista.ts` / `src/lib/laorotava.ts` / `src/lib/losrealejos.ts` / `src/lib/guimar.ts` / `src/lib/candelaria.ts` / `src/lib/elsauzal.ts` / `src/lib/santaursula.ts`     / `src/lib/lamatanza.ts` / `src/lib/lavictoria.ts` / `src/lib/laguancha.ts` / `src/lib/sanmiguel.ts` / `src/lib/arafo.ts` / `src/lib/eltanque.ts` / `src/lib/garachico.ts`   / `src/lib/puertocruz.ts` / `src/lib/santiago.ts` / `src/lib/vilaflor.ts`, agregadores `src/lib/lagenda.ts` / `src/lib/tenerifesevive.ts` / `src/lib/canariasfiestas.ts`, agregador `src/lib/verbenas.ts`, PDFs en `src/lib/pdf.ts` (pdfjs-dist, gratis).
 - Verificación por municipio: primero ¿hay algo nuevo del año vigente? Luego
   ¿en qué formato? PDF con texto → directo; solo imágenes (La Orotava
   galería 7 PNGs, Arico 21 págs) → `programa-imagen` en `/api/estado.json` y OCR
@@ -41,6 +41,7 @@ de los ayuntamientos (caché 1h por adaptador) y filtra verbenas con patrones.
 - Garachico: WP con plugin ?news= (sin año ni meta; vigencia por fecha visible). Patronales Santa Ana y San Roque 24 jul–16 ago; programa PDF revista escaneada 35 MB fuera de presupuesto. Plaza de La Libertad.
 - Puerto de la Cruz: WP REST abierta (posts + media + ajde_events viejos). Noticias fechadas + tarjetas /eventos/ (TÍTULO 🌍lugar 📅fecha ⌚hora) + programas en Drive (patrón Tacoronte). Crónicas en pasado filtradas (EN_PASADO normalizado: \b no casa tras ó).
 - Santiago del Teide: WP Divi (REST 401), slugs sin año + fecha visible mes-primero; fichas /evento/ ("septiembre 11 @ 9:00 am"); NFKD+strip por negrita unicode (si no, "sábado" no casa). Tamaimo/Arguayo/Los Gigantes. Latinazo clasifica.
+- Vilaflor/Guía/Los Silos: webs obsoletas, viven de agregadores. `vilaflor.ts` es el patrón preparado: entrada en FUENTES + gancho `fuentesAlternativas()` para cuando inventemos de dónde tirar (Facebook/Instagram/carteles).
 - TenerifeSeVive (blog WP.com): tabla viva Fecha|Localidad|Tipo|Orquestas vía REST pública (39 filas sep-nov 2026). Cubre barrios sin fuente oficial (Abrigos, Fañabé, Vilaflor...). Agregador último, fusiona con oficial.
 - CanariasFiestas (blog programas): archivo mensual /YYYY/MM/ filtrado a Tenerife por municipio en titular (dos primeras partes; Pájara/Gáldar/Costa Norte vetados). Programas inline día+hora. Agregador último.
 - Tegueste DESCUBRE programas: cada ciclo lee /fiestas/ y procesa los PDF
@@ -69,7 +70,7 @@ de los ayuntamientos (caché 1h por adaptador) y filtra verbenas con patrones.
   los archives estáticos de DeBelingo). Mencionar una suma +5. Purgados
   topónimos y genéricos ("Tenerife", "Calle", "Sergio"...) para no crear FPs.
 
-Estado: 127 eventos en 27 municipios (verificado 13-sep-2026: Santiago 3 jul-ago, Puerto 2, San Miguel 2 futuras 27/29-sep, Candelaria 5 con auto-OCR, etc.). Santa Cruz: días flexibles, bailes sin hora con hora previa, penalty religioso solo sin mención explícita, dedup general con fusión. Chips y `pie-total` ya cuentan solo futuras.
+Estado: 127 eventos en 28 municipios (verificado 13-sep-2026: Santiago 3 jul-ago, Puerto 2, San Miguel 2 futuras 27/29-sep, Candelaria 5 con auto-OCR, Vilaflor 3 vía agregador, etc.). Santa Cruz: días flexibles, bailes sin hora con hora previa, penalty religioso solo sin mención explícita, dedup general con fusión. Chips y `pie-total` ya cuentan solo futuras.
 - Exportar agenda: botón 📥 genera PNG de la semana (ayer→domingo) con
   html2canvas vía importmap CDN (`esm.sh`, sin bundlear) + modal
   Compartir/Descargar (adaptado de DeBelingo, sin Firebase).
