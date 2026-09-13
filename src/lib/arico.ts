@@ -17,6 +17,7 @@ import {
 import { fetchText, textoConSaltos } from './http.js';
 import { avisar, rastrearProgramas } from './avisos.js';
 import { textoOcr } from './ocr.js';
+import { lanzarOcrAutoImagenes, leerOcrAuto, textoSimilar } from './ocr-auto.js';
 import type { Verbena } from './types.js';
 
 const BASE = 'https://www.ayuntamientodearico.com';
@@ -89,12 +90,27 @@ function nucleoDe(texto: string): string {
 }
 
 /** Programas publicados solo como imágenes: el texto OCR vive en
- *  src/lib/data/ocr-programas.json (generado por scripts/ocr-programas.mjs). */
-function programasPendientes(html: string, url: string): void {
-  const imgs = html.match(/PROGRAMA[^"']*?[_-]page-\d+\.(?:jpg|jpeg|png|webp)/gi);
-  if (imgs && imgs.length > 2 && !textoOcr('arico')) {
+ *  src/lib/data/ocr-programas.json (generado por scripts/ocr-programas.mjs)
+ *  o en la caché automática (.cache/ocr-auto, ver ocr-auto.ts).
+ *  Devuelve la página si encontró galería (para procesar su caché). */
+function programasPendientes(html: string, url: string): string | null {
+  const raw = html.match(/["']([^"']*PROGRAMA[^"']*?[_-]page-\d+\.(?:jpg|jpeg|png|webp))["']/gi) || [];
+  const imgs: string[] = [];
+  for (const m of raw) {
+    let src = m.slice(1, -1);
+    if (/-\d{2,4}x\d{2,4}\.(jpg|jpeg|png|webp)$/i.test(src)) continue; // miniatura WP
+    if (src.startsWith('/')) src = BASE + src;
+    if (!/^https?:/i.test(src) || imgs.includes(src)) continue;
+    imgs.push(src);
+  }
+  if (imgs.length <= 2) return null;
+  const manual = textoOcr('arico');
+  if (manual?.texto && manual.fuente === url) return null; // ya cubierto
+  if (!leerOcrAuto(url)?.texto) {
+    lanzarOcrAutoImagenes(url, imgs, MUNI);
     avisar(MUNI, 'programa-imagen', url, `solo-imagen (${imgs.length} págs) sin OCR`);
   }
+  return url;
 }
 
 export async function obtenerVerbenasArico(): Promise<Verbena[]> {
@@ -144,6 +160,7 @@ export async function obtenerVerbenasArico(): Promise<Verbena[]> {
   };
 
   let items: Candidato[] = [];
+  const paginasImagen: string[] = [];
   try {
     items = await descubrir();
   } catch (e) {
@@ -161,7 +178,8 @@ export async function obtenerVerbenasArico(): Promise<Verbena[]> {
         console.warn(`arico post antiguo (${pub}) descartado: ${it.url}`);
         continue;
       }
-      programasPendientes(d, it.url);
+      const pg = programasPendientes(d, it.url);
+      if (pg && !paginasImagen.includes(pg)) paginasImagen.push(pg);
       const cuerpo = normalizarHoras(textoConSaltos(d));
       const anyo = anyoDe(d, it.url);
       const slug = it.url.split('/').filter(Boolean).pop() || 'noticia';
@@ -171,7 +189,8 @@ export async function obtenerVerbenasArico(): Promise<Verbena[]> {
     }
   }
 
-  // Programa publicado solo como imágenes (OCR cacheado, ver scripts/ocr-programas.mjs).
+  // Programa publicado solo como imágenes (OCR manual versionado o
+  // automático en caché, ver scripts/ocr-programas.mjs y ocr-auto.ts).
   const ocr = textoOcr('arico');
   if (ocr?.texto) {
     procesar(normalizarHoras(ocr.texto), {
@@ -179,6 +198,17 @@ export async function obtenerVerbenasArico(): Promise<Verbena[]> {
       slug: `ocr-${ocr.anyo || 'prog'}`,
       url: ocr.fuente,
       etiqueta: `programa OCR ${ocr.anyo}`
+    });
+  }
+  for (const pg of paginasImagen) {
+    const auto = leerOcrAuto(pg);
+    if (!auto?.texto) continue;
+    if (ocr?.texto && textoSimilar(auto.texto, ocr.texto)) continue; // ya cubierto
+    procesar(normalizarHoras(auto.texto), {
+      anyo: pg.match(/(20\d{2})/)?.[1] || String(new Date().getFullYear()),
+      slug: 'ocr-auto',
+      url: pg,
+      etiqueta: 'programa OCR auto'
     });
   }
 

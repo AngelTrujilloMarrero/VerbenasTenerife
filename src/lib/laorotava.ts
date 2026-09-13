@@ -17,6 +17,7 @@ import {
 import { fetchText, textoConSaltos } from './http.js';
 import { avisar, rastrearProgramas } from './avisos.js';
 import { textoOcr } from './ocr.js';
+import { lanzarOcrAutoImagenes, leerOcrAuto, textoSimilar } from './ocr-auto.js';
 import { anyoDelTexto, obtenerTextoPdf } from './pdf.js';
 import type { Verbena } from './types.js';
 
@@ -222,11 +223,11 @@ export async function obtenerVerbenasLaOrotava(): Promise<Verbena[]> {
   };
 
   let items: Candidato[] = [];
-  const htmlCache: string[] = [];
+  const htmlCache: { url: string; html: string }[] = [];
   try {
     items = await descubrir();
     for (const p of [`${BASE}/es/agenda`, `${BASE}/es/noticias`]) {
-      try { htmlCache.push(await fetchText(p)); } catch {}
+      try { htmlCache.push({ url: p, html: await fetchText(p) }); } catch {}
     }
   } catch (e) {
     console.error('laorotava índice fallo', e);
@@ -236,7 +237,7 @@ export async function obtenerVerbenasLaOrotava(): Promise<Verbena[]> {
     try {
       await espera(PAUSA_MS);
       const d = await fetchText(it.url);
-      htmlCache.push(d);
+      htmlCache.push({ url: it.url, html: d });
       const cuerpo = normalizarHoras(textoConSaltos(d));
       const slug = it.url.split('/').filter(Boolean).pop() || 'evento';
       procesar(cuerpo, { anyo: it.anyo, slug, url: it.url, etiqueta: `agenda: ${it.titulo.slice(0, 50)}` });
@@ -248,7 +249,7 @@ export async function obtenerVerbenasLaOrotava(): Promise<Verbena[]> {
   // PDFs del año vigente enlazados desde agenda/noticias
   const rePdf = /href="([^"]+\.pdf[^"]*)"/gi;
   const vigentes = new Set<string>();
-  for (const html of htmlCache) {
+  for (const { html } of htmlCache) {
     let m: RegExpExecArray | null;
     rePdf.lastIndex = 0;
     while ((m = rePdf.exec(html)) !== null && vigentes.size < MAX_PDFS) {
@@ -286,8 +287,7 @@ export async function obtenerVerbenasLaOrotava(): Promise<Verbena[]> {
   }
 
   // Programa publicado solo como imágenes (galería PNG en agenda):
-  // el texto OCR vive en src/lib/data/ocr-programas.json (generado
-  // manualmente para este finde; futuro se avisa vía monitor).
+  // OCR manual versionado o automático en caché (ocr-auto.ts).
   const ocr = textoOcr('laorotava');
   if (ocr?.texto) {
     procesar(normalizarHoras(ocr.texto), {
@@ -296,10 +296,24 @@ export async function obtenerVerbenasLaOrotava(): Promise<Verbena[]> {
       url: ocr.fuente,
       etiqueta: `programa OCR ${ocr.anyo}`
     });
-  } else {
-    // Detecta programa-imagen pendiente (7 PNGs en galería) para avisar
-    const tieneGaleria = htmlCache.some((h) => (h.match(/\/sites\/default\/files\/2026-08\/\d+\.png/g) || []).length >= 4);
-    if (tieneGaleria) {
+  }
+  // Detecta galerías PNG del año y las OCR-ea en 2º plano si hace falta.
+  const vigente = String(new Date().getFullYear());
+  const reGaleria = new RegExp(`/sites/default/files/${vigente}-\\d{2}/\\d+\\.png`, 'g');
+  for (const { url: pageUrl, html } of htmlCache) {
+    const uni = [...new Set([...html.matchAll(reGaleria)].map((m) => BASE + m[0]))];
+    if (uni.length < 4) continue;
+    const auto = leerOcrAuto(pageUrl);
+    if (auto?.texto) {
+      if (ocr?.texto && textoSimilar(auto.texto, ocr.texto)) continue; // ya cubierto
+      procesar(normalizarHoras(auto.texto), {
+        anyo: vigente,
+        slug: 'ocr-auto',
+        url: pageUrl,
+        etiqueta: 'programa OCR auto'
+      });
+    } else {
+      lanzarOcrAutoImagenes(pageUrl, uni, MUNI);
       avisar(MUNI, 'programa-imagen', LAOROTAVA_URL, 'solo-imagen (galería PNG) sin OCR — este finde');
     }
   }

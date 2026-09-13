@@ -50,9 +50,12 @@ de los ayuntamientos (caché 1h por adaptador) y filtra verbenas con patrones.
   claves): centralizado en `pdf.ts` para TODOS los municipios. Cuando un PDF
   es escaneado y no hay `textoOcr()` versionado, devuelve el texto cacheado
   en `.cache/ocr-auto/` o lanza el OCR en 2º plano (aviso `ocr-en-curso`;
-  entra en el siguiente ciclo). Piloto y compuerta anti-fechas-basura en
-  La Matanza (secciones con día imposible o día-semana incoherente se
-  descartan).
+  entra en el siguiente ciclo). También cubre galerías web solo-imagen
+  (Arico, San Juan, Candelaria pueblos, La Orotava PNGs): descarga las
+  imágenes, las OCR-ea y cachea por página; si el manual ya cubre ese
+  programa (`textoSimilar`) no se duplica. Piloto y compuerta
+  anti-fechas-basura en La Matanza (secciones con día imposible o
+  día-semana incoherente se descartan).
 - Filtro: título con baile/verbena/orquesta, `amenizado por`, diccionario de
   orquestas, hora 20-23h, lugar plaza/parque. Descarte: misa, teatro, expo, cuentos.
   Títulos tipo "Fiestas de X" entran como contenedores y se parten por días.

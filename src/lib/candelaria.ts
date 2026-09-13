@@ -17,6 +17,7 @@ import {
 import { fetchText, textoConSaltos } from './http.js';
 import { avisar, rastrearProgramas } from './avisos.js';
 import { textoOcr } from './ocr.js';
+import { lanzarOcrAutoImagenes, leerOcrAuto, textoSimilar } from './ocr-auto.js';
 import { anyoDelTexto, obtenerTextoPdf } from './pdf.js';
 import type { Verbena } from './types.js';
 
@@ -316,7 +317,8 @@ export async function obtenerVerbenasCandelaria(): Promise<Verbena[]> {
     }
   }
 
-  // 3) Programas publicados solo como imágenes (OCR cacheado).
+  // 3) Programas publicados solo como imágenes (OCR manual versionado o
+  // automático en caché, ver scripts/ocr-programas.mjs y ocr-auto.ts).
   const ocr = textoOcr('candelaria');
   if (ocr?.texto) {
     procesar(normalizarHoras(ocr.texto), {
@@ -325,9 +327,20 @@ export async function obtenerVerbenasCandelaria(): Promise<Verbena[]> {
       url: ocr.fuente,
       etiqueta: `programa OCR ${ocr.anyo}`
     });
-  } else {
-    // Fotos de programas del año en pueblos -> aviso programa-imagen.
-    for (const f of await fotosProgramasVigentes()) {
+  }
+  // Fotos de programas del año en pueblos -> OCR auto o aviso.
+  for (const f of await fotosProgramasVigentes()) {
+    const auto = leerOcrAuto(f.pueblo);
+    if (auto?.texto) {
+      if (ocr?.texto && textoSimilar(auto.texto, ocr.texto)) continue; // ya cubierto
+      procesar(normalizarHoras(auto.texto), {
+        anyo: String(new Date().getFullYear()),
+        slug: 'ocr-auto',
+        url: f.pueblo,
+        etiqueta: 'programa OCR auto'
+      });
+    } else {
+      lanzarOcrAutoImagenes(f.pueblo, f.imgs, MUNI);
       avisar(MUNI, 'programa-imagen', f.pueblo, `solo-imagen (${f.imgs.length} fotos ${new Date().getFullYear()}) sin OCR: ${f.imgs[0].split('/').pop()}`);
     }
   }
