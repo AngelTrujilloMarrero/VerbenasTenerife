@@ -12,6 +12,18 @@ const fuentes = (filtro
   ? FUENTES.filter((f) => f.id === filtro.toLowerCase())
   : FUENTES
 ).map((f) => ({ id: f.id, nombre: f.nombre }));
+// Config Firebase web (solo pública) para lectura directa de RTDB.
+// Sin DATABASE_URL se usa la API en vivo (que además rellena la BD).
+const fbConfig = {
+  apiKey: import.meta.env.PUBLIC_FIREBASE_API_KEY || '',
+  authDomain: import.meta.env.PUBLIC_FIREBASE_AUTH_DOMAIN || '',
+  databaseURL: import.meta.env.PUBLIC_FIREBASE_DATABASE_URL || '',
+  projectId: import.meta.env.PUBLIC_FIREBASE_PROJECT_ID || '',
+  storageBucket: import.meta.env.PUBLIC_FIREBASE_STORAGE_BUCKET || '',
+  messagingSenderId: import.meta.env.PUBLIC_FIREBASE_MESSAGING_SENDER_ID || '',
+  appId: import.meta.env.PUBLIC_FIREBASE_APP_ID || ''
+};
+const fbOn = !!(fbConfig.apiKey && fbConfig.databaseURL);
 ---
 
 <html lang="es">
@@ -20,7 +32,11 @@ const fuentes = (filtro
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Verbenas Tenerife — Próximas Verbenas</title>
   <script type="importmap">
-    { "imports": { "html2canvas": "https://esm.sh/html2canvas@1.4.1" } }
+    { "imports": {
+      "html2canvas": "https://esm.sh/html2canvas@1.4.1",
+      "firebase/app": "https://esm.sh/firebase@12.19.0/app",
+      "firebase/database": "https://esm.sh/firebase@12.19.0/database"
+    } }
   </script>
   <!-- is:global: las tarjetas se inyectan por JS sin el atributo de scope
     de Astro; con estilo encapsulado quedarían sin CSS (iconos gigantes). -->
@@ -106,6 +122,15 @@ const fuentes = (filtro
       max-height: 90vh; overflow: auto; text-align: center; }
     .modal-box h3 { margin: 0 0 12px; }
     .modal-box img { max-width: 100%; border-radius: 8px; background: #111827; }
+    .bd { max-width: 900px; margin: 28px auto 40px; padding: 0 16px; }
+    .bd h3 { text-align: center; color: #9ca3af; font-size: 16px; margin: 0 0 12px; }
+    .bd small { display: block; text-align: center; color: #9ca3af; margin-top: 8px; }
+    .tabla-ext { overflow-x: auto; }
+    .bd table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .bd th, .bd td { padding: 6px 10px; border-bottom: 1px solid #374151; text-align: left; }
+    .bd th { color: #9ca3af; font-weight: 600; }
+    .bd td.num { text-align: right; font-variant-numeric: tabular-nums; }
+    .bd .ok { color: #4ade80; } .bd .mal { color: #f87171; }
   </style>
 </head>
 <body>
@@ -154,9 +179,19 @@ const fuentes = (filtro
     <small>VerbenasTenerife · datos en vivo de los ayuntamientos · <span id="pie-total">0</span> verbenas</small>
   </footer>
 
+  <section class="bd" id="bd" hidden>
+    <h3>🗄️ En la base de datos</h3>
+    <div class="tabla-ext"><table id="bd-tabla">
+      <thead><tr><th>Fuente</th><th>Guardados</th><th>Próximas</th><th>Actualizado</th><th>Estado</th></tr></thead>
+      <tbody></tbody>
+    </table></div>
+    <small id="bd-total"></small>
+    <small>Los eventos con más de 2 días pasados se borran automáticamente.</small>
+  </section>
+
   <noscript><p style="text-align:center">Necesitas JavaScript para cargar las agendas en vivo.</p></noscript>
 
-  <script define:vars={{ fuentes, coords: COORDS }}>
+  <script define:vars={{ fuentes, coords: COORDS, fbConfig, fbOn }}>
     // Paleta por tipo (réplica DeBelingo; Concierto/Fiestas propios)
     const TIPO = {
       'Baile Normal':  { b: '#60a5fa', g: 'rgba(96,165,250,0.15)' },
@@ -380,6 +415,80 @@ const fuentes = (filtro
     }
 
     async function main() {
+      // Vía base de datos (una lectura); si falla o está vacía, en vivo.
+      if (fbOn) {
+        try { await cargaDesdeBD(); return; }
+        catch (e) { console.warn('BD no disponible, en vivo:', e?.message || e); }
+      }
+      await cargaEnVivo();
+    }
+
+    const haceX = (ts) => {
+      if (!ts) return '—';
+      const h = Math.floor((Date.now() - ts) / 36e5);
+      if (h < 1) return 'hace minutos';
+      if (h < 24) return `hace ${h} h`;
+      const d = Math.floor(h / 24);
+      return d === 1 ? 'ayer' : `hace ${d} días`;
+    };
+
+    async function cargaDesdeBD() {
+      const [{ initializeApp }, { getDatabase, ref, get }] = await Promise.all([
+        import('firebase/app'), import('firebase/database')
+      ]);
+      const db = getDatabase(initializeApp(fbConfig));
+      const [ev, me] = await Promise.all([get(ref(db, 'events')), get(ref(db, 'meta'))]);
+      const datos = ev.val() || null;
+      if (!datos || !Object.keys(datos).length) throw new Error('BD vacía');
+      const meta = me.val() || {};
+      // Dedup por ID (patrón admin): el vivo gana si hubiera solape.
+      const mapa = new Map();
+      Object.entries(datos).forEach(([id, v]) => mapa.set(id, { id, ...v }));
+      let lista = [...mapa.values()];
+      if (fActual) lista = lista.filter((v) => v.fuente === fActual);
+      const hoy0 = new Date(); hoy0.setHours(0, 0, 0, 0);
+      lista.forEach((v) => { v.futura = aFecha(v.day) >= hoy0; });
+      todas.push(...lista);
+      const hoyTxt = `${String(hoy0.getDate()).padStart(2, '0')}-${String(hoy0.getMonth() + 1).padStart(2, '0')}-${hoy0.getFullYear()}`;
+      $('badge-hoy').textContent = hoyTxt; $('pie-hoy').textContent = hoyTxt;
+      for (const f of fuentes) {
+        const evs = lista.filter((v) => v.fuente === f.id);
+        const nFut = evs.filter((v) => v.futura).length;
+        const m = meta[f.id];
+        chips[f.id].className = 'chip ok';
+        chips[f.id].textContent = `✓ ${f.nombre} (${nFut})${m?.at ? ` · ${haceX(m.at)}` : ''}${m && m.ok === false ? ' ⚠' : ''}`;
+        const porMuni = {};
+        evs.filter((v) => v.futura).forEach((v) => {
+          (porMuni[v.municipio] = porMuni[v.municipio] || []).push(v.day);
+        });
+        Object.entries(porMuni).forEach(([muni, dias]) => cargaMeteo(muni, dias));
+      }
+      hechas = total;
+      barra.style.width = '100%';
+      texto.textContent = `Listo: ${total}/${total} municipios · ${todas.filter((v) => v.futura).length} próximas (base de datos).`;
+      const bf = $('badge-fuentes');
+      bf.textContent = `✓ ${total}/${total} municipios (BD)`;
+      bf.classList.add('ok');
+      render();
+      renderBD(meta, mapa.size);
+    }
+
+    function renderBD(meta, guardados) {
+      const tb = document.querySelector('#bd-tabla tbody');
+      tb.innerHTML = fuentes.map((f) => {
+        const m = (meta || {})[f.id];
+        const n = todas.filter((v) => v.fuente === f.id).length;
+        const est = !m ? '<span>—</span>' : m.ok === false
+          ? '<span class="mal">⚠ fallo último raspado</span>' : '<span class="ok">✓ ok</span>';
+        return `<tr><td>${esc(f.nombre)}</td><td class="num">${n}</td>` +
+          `<td class="num">${todas.filter((v) => v.fuente === f.id && v.futura).length}</td>` +
+          `<td>${m?.at ? esc(haceX(m.at)) : '—'}</td><td>${est}</td></tr>`;
+      }).join('');
+      $('bd-total').textContent = `${guardados} eventos almacenados en total.`;
+      $('bd').hidden = false;
+    }
+
+    async function cargaEnVivo() {
       if (!total) {
         texto.textContent = 'Municipio desconocido.';
         return;

@@ -62,6 +62,15 @@ de los ayuntamientos (caché 1h por adaptador) y filtra verbenas con patrones.
   programa (`textoSimilar`) no se duplica. Piloto y compuerta
   anti-fechas-basura en La Matanza (secciones con día imposible o
   día-semana incoherente se descartan).
+- Firebase Realtime Database (`verbenastenerife`, europe-west1): `src/lib/db.ts`
+  vuelca en 2º plano desde `/api/verbenas.json` con upsert por ID estable
+  (`set`, nunca `push`; leer-antes-de-escribir con comparación NFD como el
+  admin) y purga lo de hace >2 días; `/meta` por fuente. El navegador lee
+  directo con el SDK web (una lectura + Map por ID) y cae a la API si la BD
+  está vacía (la API entonces la rellena). Al pie, sección "En la base de
+  datos" con lo guardado por fuente. Reglas: lectura pública, escritura
+  bloqueada (escribe el servidor con Admin SDK). Credenciales en `.env`
+  (gitignored, ver `.env.example`); falta la service account.
 - Filtro: título con baile/verbena/orquesta, `amenizado por`, diccionario de
   orquestas, hora 20-23h, lugar plaza/parque. Descarte: misa, teatro, expo, cuentos.
   Títulos tipo "Fiestas de X" entran como contenedores y se parten por días.
