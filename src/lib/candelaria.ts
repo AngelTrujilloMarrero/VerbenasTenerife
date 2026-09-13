@@ -2,6 +2,7 @@ import * as cheerio from 'cheerio';
 import {
   clasificarDetalle,
   clasificarTitulo,
+  diaSemanaValido,
   esContenedor,
   extraerBailesSinHora,
   extraerSubEventos,
@@ -222,7 +223,7 @@ export async function obtenerVerbenasCandelaria(): Promise<Verbena[]> {
     if (!verbenas.some((x) => x.id === v.id)) verbenas.push(v);
   };
 
-  const procesar = (cuerpo: string, opts: { anyo: string; slug: string; url: string; etiqueta: string }) => {
+  const procesar = (cuerpo: string, opts: { anyo: string; slug: string; url: string; etiqueta: string; validarDia?: boolean }) => {
     const limpio = cuerpo.replace(/SÁBAD O/gi, 'SÁBADO').replace(/D OMINGO/gi, 'DOMINGO');
     const ctx = mesContexto(limpio);
     const mesDoc = ctx.mes || mesDominante(limpio);
@@ -245,7 +246,11 @@ export async function obtenerVerbenasCandelaria(): Promise<Verbena[]> {
         }
       }
       if (!mes) continue;
-      const day = `${String(sec.dia).padStart(2, '0')}-${mes}-${sec.anyo || anyoPrev || opts.anyo}`;
+      const anyoSec = sec.anyo || anyoPrev || opts.anyo;
+      // OCR auto: la cabecera con día de semana debe cuadrar en calendario
+      // ("Sábado 21" de un marzo leído como julio se tumba entera).
+      if (opts.validarDia && !diaSemanaValido(sec.texto, sec.dia, mes, anyoSec)) continue;
+      const day = `${String(sec.dia).padStart(2, '0')}-${mes}-${anyoSec}`;
       const contextoHora = (secciones[i - 1]?.texto.slice(-600) || '') + sec.texto;
       const lugarSec = nucleoDe(sec.texto) || MUNI;
       const lineas = [
@@ -337,7 +342,8 @@ export async function obtenerVerbenasCandelaria(): Promise<Verbena[]> {
         anyo: String(new Date().getFullYear()),
         slug: 'ocr-auto',
         url: f.pueblo,
-        etiqueta: 'programa OCR auto'
+        etiqueta: 'programa OCR auto',
+        validarDia: true
       });
     } else {
       lanzarOcrAutoImagenes(f.pueblo, f.imgs, MUNI);

@@ -18,6 +18,11 @@ import { LAMATANZA_URL, obtenerVerbenasLaMatanza } from './lamatanza.js';
 import { LAVICTORIA_URL, obtenerVerbenasLaVictoria } from './lavictoria.js';
 import { LAGUANCHA_URL, obtenerVerbenasLaGuancha } from './laguancha.js';
 import { SANMIGUEL_URL, obtenerVerbenasSanMiguel } from './sanmiguel.js';
+import { ARAFO_URL, obtenerVerbenasArafo } from './arafo.js';
+import { ELTANQUE_URL, obtenerVerbenasElTanque } from './eltanque.js';
+import { GARACHICO_URL, obtenerVerbenasGarachico } from './garachico.js';
+import { PUERTOCRUZ_URL, obtenerVerbenasPuertoCruz } from './puertocruz.js';
+import { SANTIAGO_URL, obtenerVerbenasSantiago } from './santiago.js';
 import { LAGENDA_URL, obtenerVerbenasLagenda } from './lagenda.js';
 import { TENERIFESEVIVE_URL, obtenerVerbenasTenerifeSeVive } from './tenerifesevive.js';
 import { CANARIASFIESTAS_URL, obtenerVerbenasCanariasFiestas } from './canariasfiestas.js';
@@ -60,6 +65,11 @@ export const FUENTES: Fuente[] = [
   { id: 'lavictoria', nombre: 'La Victoria', agendaUrl: LAVICTORIA_URL, obtener: obtenerVerbenasLaVictoria },
   { id: 'laguancha', nombre: 'La Guancha', agendaUrl: LAGUANCHA_URL, obtener: obtenerVerbenasLaGuancha },
   { id: 'sanmiguel', nombre: 'San Miguel de Abona', agendaUrl: SANMIGUEL_URL, obtener: obtenerVerbenasSanMiguel },
+  { id: 'arafo', nombre: 'Arafo', agendaUrl: ARAFO_URL, obtener: obtenerVerbenasArafo },
+  { id: 'eltanque', nombre: 'El Tanque', agendaUrl: ELTANQUE_URL, obtener: obtenerVerbenasElTanque },
+  { id: 'garachico', nombre: 'Garachico', agendaUrl: GARACHICO_URL, obtener: obtenerVerbenasGarachico },
+  { id: 'puertocruz', nombre: 'Puerto de la Cruz', agendaUrl: PUERTOCRUZ_URL, obtener: obtenerVerbenasPuertoCruz },
+  { id: 'santiago', nombre: 'Santiago del Teide', agendaUrl: SANTIAGO_URL, obtener: obtenerVerbenasSantiago },
   { id: 'lagenda', nombre: 'Lagenda', agendaUrl: LAGENDA_URL, obtener: obtenerVerbenasLagenda },
   { id: 'tenerifesevive', nombre: 'TenerifeSeVive', agendaUrl: TENERIFESEVIVE_URL, obtener: obtenerVerbenasTenerifeSeVive },
   { id: 'canariasfiestas', nombre: 'CanariasFiestas', agendaUrl: CANARIASFIESTAS_URL, obtener: obtenerVerbenasCanariasFiestas }

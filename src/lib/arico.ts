@@ -2,6 +2,7 @@ import * as cheerio from 'cheerio';
 import {
   clasificarDetalle,
   clasificarTitulo,
+  diaSemanaValido,
   esContenedor,
   extraerBailesSinHora,
   extraerSubEventos,
@@ -127,7 +128,7 @@ export async function obtenerVerbenasArico(): Promise<Verbena[]> {
   };
 
   /** Parte un texto (noticia o programa OCR) por días y extrae verbenas. */
-  const procesar = (cuerpo: string, opts: { anyo: string; slug: string; url: string; etiqueta: string }) => {
+  const procesar = (cuerpo: string, opts: { anyo: string; slug: string; url: string; etiqueta: string; validarDia?: boolean }) => {
     const ctx = mesContexto(cuerpo);
     const ref = ctx.mes && opts.anyo ? { mes: ctx.mes, anyo: opts.anyo } : undefined;
     const lugar = lugarCercano(cuerpo.slice(0, 2000), opts.etiqueta) || nucleoDe(cuerpo) || MUNI;
@@ -139,7 +140,9 @@ export async function obtenerVerbenasArico(): Promise<Verbena[]> {
       if (sec.anyo) anyoPrev = sec.anyo;
       const mes = mesANum(sec.mes) || mesANum(mesPrev) || ctx.mes;
       if (!mes) continue;
-      const day = `${String(sec.dia).padStart(2, '0')}-${mes}-${sec.anyo || anyoPrev || opts.anyo}`;
+      const anyoSec = sec.anyo || anyoPrev || opts.anyo;
+      if (opts.validarDia && !diaSemanaValido(sec.texto, sec.dia, mes, anyoSec)) continue;
+      const day = `${String(sec.dia).padStart(2, '0')}-${mes}-${anyoSec}`;
       const lineas = [
         ...extraerSubEventos(sec.texto).map((s) => ({ titulo: s.titulo, hora: s.hora, orquestas: s.orquestas, extra: 0 })),
         ...extraerBailesSinHora(sec.texto).map((s) => ({ titulo: s.titulo, hora: s.hora || horaPrevia(sec.texto, s.titulo), orquestas: s.orquestas, extra: s.explicita ? 2 : 0 }))
@@ -208,7 +211,8 @@ export async function obtenerVerbenasArico(): Promise<Verbena[]> {
       anyo: pg.match(/(20\d{2})/)?.[1] || String(new Date().getFullYear()),
       slug: 'ocr-auto',
       url: pg,
-      etiqueta: 'programa OCR auto'
+      etiqueta: 'programa OCR auto',
+      validarDia: true
     });
   }
 

@@ -2,7 +2,7 @@ import * as cheerio from 'cheerio';
 import {
   clasificarDetalle,
   clasificarTitulo,
-  diaValido,
+  diaSemanaValido,
   esContenedor,
   extraerBailesSinHora,
   extraerSubEventos,
@@ -172,12 +172,6 @@ function mesPatronales(dia: number): string {
   return dia >= 20 ? '07' : '08';
 }
 
-/** Día de la semana que abre la sección (la cabecera), si lo trae. */
-function diaSemanaSecion(texto: string): string {
-  const m = texto.slice(0, 60).match(/(lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bado|domingo)/i);
-  return m ? m[1] : '';
-}
-
 export async function obtenerVerbenasLaMatanza(): Promise<Verbena[]> {
   if (cache && Date.now() - cache.at < TTL) return cache.data;
   const verbenas: Verbena[] = [];
@@ -211,9 +205,7 @@ export async function obtenerVerbenasLaMatanza(): Promise<Verbena[]> {
       // con el calendario (p. ej. "69 MIÉRCOLES" del tesseract) tumba la
       // sección entera antes de publicar fechas basura.
       const anyoSec = sec.anyo || anyoPrev || opts.anyo;
-      if (opts.patronales && (sec.dia < 1 || sec.dia > 31)) continue;
-      if (opts.patronales && diaSemanaSecion(sec.texto)
-        && !diaValido(sec.dia, mes, anyoSec, diaSemanaSecion(sec.texto))) continue;
+      if (opts.patronales && !diaSemanaValido(sec.texto, sec.dia, mes, anyoSec)) continue;
       const day = `${String(sec.dia).padStart(2, '0')}-${mes}-${anyoSec}`;
       const lineas = [
         ...extraerSubEventos(sec.texto).map((s) => ({ titulo: s.titulo, hora: s.hora, orquestas: s.orquestas, extra: 0 })),

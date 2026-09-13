@@ -2,6 +2,7 @@ import * as cheerio from 'cheerio';
 import {
   clasificarDetalle,
   clasificarTitulo,
+  diaSemanaValido,
   esContenedor,
   extraerBailesSinHora,
   extraerSubEventos,
@@ -148,7 +149,7 @@ export async function obtenerVerbenasLaOrotava(): Promise<Verbena[]> {
     if (!verbenas.some((x) => x.id === v.id)) verbenas.push(v);
   };
 
-  const procesar = (cuerpo: string, opts: { anyo: string; slug: string; url: string; etiqueta: string }) => {
+  const procesar = (cuerpo: string, opts: { anyo: string; slug: string; url: string; etiqueta: string; validarDia?: boolean }) => {
     let limpio = cuerpo.replace(/SÁBAD O/gi, 'SÁBADO').replace(/D OMINGO/gi, 'DOMINGO');
     // Programa en imágenes: mes como encabezado suelto "AGOSTO SÁBADO 29" o "SEPTIEMBRE MARTES 1".
     // Lo normalizamos a "SÁBADO 29 DE AGOSTO" para que partirPorDias lo capture.
@@ -198,7 +199,9 @@ export async function obtenerVerbenasLaOrotava(): Promise<Verbena[]> {
         continue;
       }
       const secTyped = sec as any;
-      const day = `${String(secTyped.dia).padStart(2, '0')}-${mes}-${secTyped.anyo || anyoPrev || opts.anyo}`;
+      const anyoSec = secTyped.anyo || anyoPrev || opts.anyo;
+      if (opts.validarDia && !diaSemanaValido(secTyped.texto, secTyped.dia, mes, anyoSec)) continue;
+      const day = `${String(secTyped.dia).padStart(2, '0')}-${mes}-${anyoSec}`;
       const contextoHora = (cuerpos[i - 1] as any)?.texto?.slice(-600) || '' + secTyped.texto;
       const lugarSec = nucleoDe(secTyped.texto) || MUNI;
       const lineas = [
@@ -310,7 +313,8 @@ export async function obtenerVerbenasLaOrotava(): Promise<Verbena[]> {
         anyo: vigente,
         slug: 'ocr-auto',
         url: pageUrl,
-        etiqueta: 'programa OCR auto'
+        etiqueta: 'programa OCR auto',
+        validarDia: true
       });
     } else {
       lanzarOcrAutoImagenes(pageUrl, uni, MUNI);

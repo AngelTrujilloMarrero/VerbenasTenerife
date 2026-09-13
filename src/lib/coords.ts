@@ -24,7 +24,12 @@ export const COORDS: Record<string, { lat: number; lon: number }> = {
   lamatanza: { lat: 28.4569, lon: -16.4479 },
   lavictoria: { lat: 28.4590, lon: -16.4690 },
   laguancha: { lat: 28.3768, lon: -16.6529 },
-  sanmiguel: { lat: 28.0917, lon: -16.6167 }
+  sanmiguel: { lat: 28.0917, lon: -16.6167 },
+  arafo: { lat: 28.3389, lon: -16.4147 },
+  eltanque: { lat: 28.2147, lon: -16.7713 },
+  garachico: { lat: 28.3727, lon: -16.6526 },
+  puertocruz: { lat: 28.4166, lon: -16.5477 },
+  santiago: { lat: 28.2949, lon: -16.8614 }
 };
 
 export function coordsDe(municipio: string): { lat: number; lon: number } | null {

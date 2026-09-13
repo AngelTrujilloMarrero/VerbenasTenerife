@@ -10,7 +10,7 @@ export interface ScoredEvent {
   esVerbena: boolean;
 }
 
-const TITULO_POS = /\b(baile|gran baile|gran verbena|verbena|verbenas|verbenazo|megaverbena|tardeo|concierto bailable|noche latina|noche boricua|noche en blanco|noche de kiosc?os|baile de magos|baile de taifas?|baile de tarde|romer[ií]a|orquesta|tributo|studio 54)\b/i;
+const TITULO_POS = /\b(baile|gran baile|gran verbena|verbena|verbenas|verbenazo|megaverbena|tardeo|concierto bailable|noche latina|noche boricua|noche en blanco|noche de kiosc?os|latinazo|baile de magos|baile de taifas?|baile de tarde|romer[ií]a|orquesta|tributo|studio 54)\b/i;
 const DESC_POS = /amenizado por|amenizan|orquestas?\s*:|orquestas?\s+[A-ZÁÉÍÓÚÑ]|gran baile|noche latina/i;
 const HORA_NOCTURNA = /(19|2[0-3]|21):\d{2}/;
 
@@ -170,7 +170,7 @@ export interface SubEvento {
 const LUGAR_PREVIO = String.raw`(?:en\s+la\s+(?:plaza|parque|cancha|calle|teatro|recinto|casa|auditorio)(?:\s+(?:del?|de\s+la))?(?:\s+[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+){1,3}\s*\.?\s*)?`;
 const LINEA_BAILE = new RegExp(
   String.raw`(\d{1,2}:\d{2})\s*(?:(?:horas?|h)\b\s*\.?:?\s*)?` + LUGAR_PREVIO +
-  String.raw`[–-]?\s*([^.\n]*?(?:gran baile|baile|verbena|verbenazo|tardeo|noche latina|noche boricua|noche en blanco)[^.\n]*)\.?\s*(?:lugar:\s*([^.\n]+))?`,
+  String.raw`[–-]?\s*([^.\n]*?(?:gran baile|baile|verbena|verbenazo|tardeo|noche latina|noche boricua|noche en blanco|latinazo)[^.\n]*)\.?\s*(?:lugar:\s*([^.\n]+))?`,
   'gi'
 );
 
@@ -194,7 +194,7 @@ export function extraerSubEventos(programaTexto: string): SubEvento[] {
     let titulo = tituloRaw.trim().replace(/^[,\s:;·•\-–—]+/, '');
     // Mismo conjunto que LINEA_BAILE (incluido "baile" a secas), si no el
     // recorte no encontraba el keyword ("...se celebrará el baile de la Pamela").
-    const ki = titulo.search(/gran baile|baile|verbena|verbenazo|tardeo|noche latina|noche boricua|noche en blanco/i);
+    const ki = titulo.search(/gran baile|baile|verbena|verbenazo|tardeo|noche latina|noche boricua|noche en blanco|latinazo/i);
     if (ki > 0) {
       const prev = titulo.slice(0, ki);
       // El preámbulo suele traer la hora propia del acto ("...a las 15:00 horas
@@ -312,8 +312,12 @@ export function extraerOrquestas(titulo: string): string[] {
 // con la Orquesta X", "Fiesta Joven con ... Renzzo El Selector y Dj").
 // La extracción solo propone; el clasificador (>=4) sigue filtrando.
 const TIENE_MUSICA = /orquesta|grupo|banda|dj|parranda|\bson\b|tributo|latin|band\b/i;
-const EN_PASADO = /\b(fue|fueron|tuvo|hubo|han sido|se celebró|fueron un éxito)\b/i;
-const LINEA_SIN_HORA = /(?:((?:fiesta|gran fiesta|fiesta joven)\s+y\s+))?(gran baile|gran verbena|gran verbenazo|baile popular|verbena|verbenas|verbenazo|megaverbena|baile de magos|baile de taifas?|baile de tarde|concierto bailable|tardeo|fiesta canaria|fiesta joven|noche de kioscos|noche en blanco|baile\s+(?:al ritmo|amenizad[oa]s?|a cargo|con))\b([^.\n]{0,180}?)(?=[.]|$|\n)/gi;
+// OJO \b no casa tras vocal acentuada ("reunió\b" nunca matchea en JS):
+// se testea sobre el título normalizado (sin acentos).
+const EN_PASADO_NORM = /\b(fue|fueron|tuvo|hubo|han sido|se celebro|fueron un exito|reunio|reunieron|disfruto|disfrutaron|acogio|congrego|congregaron)\b/;
+const normPasado = (s: string): string =>
+  s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+const LINEA_SIN_HORA = /(?:((?:fiesta|gran fiesta|fiesta joven)\s+y\s+))?(gran baile|gran verbena|gran verbenazo|baile popular|verbena|verbenas|verbenazo|megaverbena|baile de magos|baile de taifas?|baile de tarde|concierto bailable|tardeo|fiesta canaria|fiesta joven|noche de kioscos|noche en blanco|latinazo|baile\s+(?:al ritmo|amenizad[oa]s?|a cargo|con))\b([^.\n]{0,180}?)(?=[.]|$|\n)/gi;
 const DIAS_CORTE = /\s+(?:el\s+)?(?:lunes|martes|miércoles|miercoles|jueves|viernes|sábado|sabado|domingo)\b/i;
 
 export interface BaileSinHora {
@@ -358,7 +362,7 @@ export function extraerBailesSinHora(textoOriginal: string): BaileSinHora[] {
     // Corta si cruza al día siguiente ("Verbena y el domingo con...") y
     // conectores colgando ("Verbena y" -> "Verbena")
     titulo = titulo.split(DIAS_CORTE)[0].replace(/\s+(y|con|de|del|el|la|los|las|e)\s*$/i, '').trim();
-    if (EN_PASADO.test(titulo)) continue;
+    if (EN_PASADO_NORM.test(normPasado(titulo))) continue;
     const orquestas = extraerOrquestas(titulo);
     // Mención vaga sin música ni desarrollo ("Verbena" a secas): fuera
     if (titulo.length < 12 && !orquestas.length) continue;
@@ -425,6 +429,19 @@ const RE_LUGAR_MALO = /\b(hasta|desde|hacia|recorrido|trayecto|salida|llegada|ac
 // El recinto debe llevar nombre propio en mayúscula ("Plaza Andrés", "Plaza
 // de la Pila"); si no caza prosa ("llenar la plaza de carcajadas").
 const RE_LUGAR_PROPIO = /^\S+\s+(?:de\s+|del\s+)?(?:la\s+|el\s+|los\s+|las\s+)?[A-ZÁÉÍÓÚÑ]/;
+
+/** Recinto mencionado JUSTO DESPUÉS del título ("...verbena, que se
+ *  celebrará en la plaza X..."): lugarCercano solo mira hacia atrás. */
+export function lugarPosterior(seccion: string, titulo: string, radio = 200): string {
+  const idx = seccion.lastIndexOf(titulo.slice(0, 30));
+  if (idx === -1) return '';
+  const post = seccion.slice(idx + titulo.length, idx + titulo.length + radio);
+  const m = post.match(/(Recinto|Parque|Plaza|Pabell[oó]n|Auditorio|Teatro|Terrero|Casa|Cancha|Mercado|Iglesia|Ermita)[ \t]+[^.\n,]{2,50}/);
+  if (!m) return '';
+  const cand = m[0].trim();
+  if (!/^\S+\s+(?:de\s+|del\s+)?(?:la\s+|el\s+|los\s+|las\s+)?[A-ZÁÉÍÓÚÑ]/.test(cand)) return '';
+  return recortarProsa(cand);
+}
 
 /** Último recinto válido mencionado antes del título (el más cercano a la línea). */
 export function lugarCercano(seccion: string, titulo: string, radio = 400): string {
@@ -494,14 +511,24 @@ const HEADER_DIA_INV = /(?<!\d)(\d{1,2})\b(?!\s*[:.]\d)\s+(viernes|s[aá]bado|do
 // Admite resto del encabezado en la misma línea ("Domingo 30 de agosto 18:30 ...").
 const HEADER_DIA_LINEA = /^(\d{1,2})(?:\s*[–-]\s*(\d{1,2}))?\s+de\s+([a-záéíóúñ]+)(?=[\s:.,–-]|$)/gim;
 // "...hasta el 24 de septiembre" (sin día de semana, con mes obligatorio;
-// \bel\b no traga "del" ni "al ... de").
+// \bel\b no traga "del" ni "al ... de"). "El día 25 de abril" (con "día"
+// intercalado, prosa de El Tanque) también parte.
 // NO parte si es un plazo ("hasta el 10 de septiembre", "inscripción antes del...").
-const DIA_EL_MES = /\bel\s+(\d{1,2})\s+de\s+([a-záéíóúñ]+)(?:\s+de\s+(20\d{2}))?/gi;
+const DIA_EL_MES = /\bel\s+(?:d[ií]a\s+)?(\d{1,2})\s+de\s+([a-záéíóúñ]+)(?:\s+de\s+(20\d{2}))?/gi;
 const NO_ES_DIA = /(hasta|antes\s+del?|desde\s+el|plazo|inscripci[oó]n|cierra?|cierre)\s*$/i;
 
 const WD_ES = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
 const normWd = (s: string) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
+/** ¿Es coherente la cabecera de la sección con el calendario? Sin día de
+ *  semana explícito se acepta; con él, debe cuadrar (tumbar "Sábado 21"
+ *  de un marzo leído como julio por el OCR auto). */
+export function diaSemanaValido(texto: string, dia: number, mes: string, anyo: string): boolean {
+  const m = texto.slice(0, 60).match(/(lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bado|domingo)/i);
+  if (!m) return true;
+  if (dia < 1 || dia > 31) return false;
+  return diaValido(dia, mes, anyo, m[1]);
+}
 /** ¿Cae `dia` en `weekday` dentro de (mes, anyo)? Para descartar artefactos
  *  de paginación ("24 25 Jueves", "13 14 Domingo") en cabeceras día-primero. */
 export function diaValido(dia: number, mes: string, anyo: string, weekday: string): boolean {
@@ -584,7 +611,7 @@ export function tipoDeEvento(titulo: string): string {
   if (/baile de taifa/i.test(titulo)) return 'Taifa';
   if (/romer[ií]a/i.test(titulo)) return 'Romería';
   if (/inclusiva/i.test(titulo)) return 'Inclusiva';
-  if (/noche latina|noche boricua|noche en blanco|tributo|studio 54|concierto|festival/i.test(titulo)) return 'Concierto';
+  if (/noche latina|noche boricua|noche en blanco|latinazo|tributo|studio 54|concierto|festival/i.test(titulo)) return 'Concierto';
   if (/baile|tardeo|verbena|verbenazo/i.test(titulo)) return 'Baile Normal';
   if (/fiestas mayores|fiestas de/i.test(titulo)) return 'Fiestas';
   return 'Otro';

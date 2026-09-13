@@ -6,6 +6,7 @@ import {
   extraerSubEventos,
   horaPrevia,
   lugarCercano,
+  lugarPosterior,
   mesANum,
   mesContexto,
   normalizarHoras,
@@ -138,19 +139,6 @@ function aliasLugares(cuerpo: string): string {
     .replace(/Explanada anexa al (Terreno|Terrero) Municipal de Luchas/gi, 'Recinto Terrero Municipal de Luchas')
     .replace(/la Explanada anexa al TM de Luchas/gi, 'el Recinto TM de Luchas')
     .replace(/Explanada anexa al TM de Luchas/gi, 'Recinto TM de Luchas');
-}
-
-/** Recinto mencionado JUSTO DESPUÉS del título ("...Verbena, que se
- *  celebrará en el Recinto..."): lugarCercano solo mira hacia atrás. */
-function lugarPosterior(seccion: string, titulo: string, radio = 200): string {
-  const idx = seccion.lastIndexOf(titulo.slice(0, 30));
-  if (idx === -1) return '';
-  const post = seccion.slice(idx + titulo.length, idx + titulo.length + radio);
-  const m = post.match(/(Recinto|Parque|Plaza|Pabellón|Auditorio|Teatro|Terrero|Casa)[ \t]+[^.\n,]{2,50}/);
-  if (!m) return '';
-  const cand = m[0].trim();
-  if (!/^\S+\s+(?:de\s+|del\s+)?(?:la\s+|el\s+|los\s+|las\s+)?[A-ZÁÉÍÓÚÑ]/.test(cand)) return '';
-  return cand;
 }
 
 /** Fiestas de Agosto: 19–31 ago + 1–2 sep (2026 verificado). Sin mes
