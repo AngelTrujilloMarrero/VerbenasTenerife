@@ -16,6 +16,8 @@ import { ELSAUZAL_URL, obtenerVerbenasElSauzal } from './elsauzal.js';
 import { SANTAURSULA_URL, obtenerVerbenasSantaUrsula } from './santaursula.js';
 import { LAMATANZA_URL, obtenerVerbenasLaMatanza } from './lamatanza.js';
 import { LAVICTORIA_URL, obtenerVerbenasLaVictoria } from './lavictoria.js';
+import { LAGUANCHA_URL, obtenerVerbenasLaGuancha } from './laguancha.js';
+import { SANMIGUEL_URL, obtenerVerbenasSanMiguel } from './sanmiguel.js';
 import { LAGENDA_URL, obtenerVerbenasLagenda } from './lagenda.js';
 import { TENERIFESEVIVE_URL, obtenerVerbenasTenerifeSeVive } from './tenerifesevive.js';
 import { CANARIASFIESTAS_URL, obtenerVerbenasCanariasFiestas } from './canariasfiestas.js';
@@ -56,6 +58,8 @@ export const FUENTES: Fuente[] = [
   { id: 'santaursula', nombre: 'Santa Úrsula', agendaUrl: SANTAURSULA_URL, obtener: obtenerVerbenasSantaUrsula },
   { id: 'lamatanza', nombre: 'La Matanza', agendaUrl: LAMATANZA_URL, obtener: obtenerVerbenasLaMatanza },
   { id: 'lavictoria', nombre: 'La Victoria', agendaUrl: LAVICTORIA_URL, obtener: obtenerVerbenasLaVictoria },
+  { id: 'laguancha', nombre: 'La Guancha', agendaUrl: LAGUANCHA_URL, obtener: obtenerVerbenasLaGuancha },
+  { id: 'sanmiguel', nombre: 'San Miguel de Abona', agendaUrl: SANMIGUEL_URL, obtener: obtenerVerbenasSanMiguel },
   { id: 'lagenda', nombre: 'Lagenda', agendaUrl: LAGENDA_URL, obtener: obtenerVerbenasLagenda },
   { id: 'tenerifesevive', nombre: 'TenerifeSeVive', agendaUrl: TENERIFESEVIVE_URL, obtener: obtenerVerbenasTenerifeSeVive },
   { id: 'canariasfiestas', nombre: 'CanariasFiestas', agendaUrl: CANARIASFIESTAS_URL, obtener: obtenerVerbenasCanariasFiestas }

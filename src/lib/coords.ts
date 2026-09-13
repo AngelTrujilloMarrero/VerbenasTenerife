@@ -22,7 +22,9 @@ export const COORDS: Record<string, { lat: number; lon: number }> = {
   elsauzal: { lat: 28.4781, lon: -16.4357 },
   santaursula: { lat: 28.4567, lon: -16.4900 },
   lamatanza: { lat: 28.4569, lon: -16.4479 },
-  lavictoria: { lat: 28.4590, lon: -16.4690 }
+  lavictoria: { lat: 28.4590, lon: -16.4690 },
+  laguancha: { lat: 28.3768, lon: -16.6529 },
+  sanmiguel: { lat: 28.0917, lon: -16.6167 }
 };
 
 export function coordsDe(municipio: string): { lat: number; lon: number } | null {
