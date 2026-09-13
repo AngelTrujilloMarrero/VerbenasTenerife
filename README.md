@@ -35,7 +35,7 @@ de los ayuntamientos (caché 1h por adaptador) y filtra verbenas con patrones.
 - La Matanza: WP Divi (REST 401), noticias /{area}/2026/{slug}/ con fecha en meta Yoast. Patronales 25 jul–6 ago en flip-book Heyzine (PDF 32 págs escaneado → OCR `lamatanza`: verbena 25/jul Swing Latino, Noche en Blanco 1/ago, verbena 6/ago Samady). Mes por día (>=20 jul, si no ago); "noche en blanco" clasifica como verbena.
 - La Victoria: WP REST abierta (slugs planos sin año: vigencia por `date`), cat Fiestas 52 + web fiestas.lavictoriadeacentejo.es/programa/ ("19 Miércoles", alias Explanada→Recinto). PDF mediateca (AAFF-Programa con texto) solo si la web no da eventos (sin cabeceras de día). Fiestas de Agosto 21 ago–2 sep (Gran Verbena 2 sep 23:00).
 - La Guancha: WP Bones (REST 401), fichas /actividad/ con fecha estructurada (Detalles Fecha/Hora) + noticias con fecha en meta Yoast y programa inline (Papada y Baile de Magos 22 ago 23:00 Kimbara/Malibú/Revelación). Barrios con fiestas propias. Alias "recinto festivo".
-- San Miguel de Abona: WP (REST 401), URLs con fecha (/2026/09/07/slug) + PDF programa con texto ("VIERNES 11 SEPTIEMBRE 13:30 horas - Plaza ..."). Patronales San Miguel Arcángel 11–29 sep (bailes 27 y 29 sep).
+- San Miguel de Abona: WP (REST 401), URLs con fecha (/2026/09/07/slug) + PDF programa con texto ("VIERNES 11 SEPTIEMBRE 13:30 horas - Plaza ..."). Patronales San Miguel Arcángel 11–29 sep (verbenas 12, 26, 27 y 29 sep, dos ofuscadas sin keyword).
 - Arafo: WebSite X5 estática (vigilante). Descubre por sitemap.xml + patrón fiestas-YYYY explícito; galerías del año a OCR auto. Sin programa 2026 hoy (patronales San Juan Degollado/San Agustín/San Bernardo en agosto).
 - El Tanque: WP Fameup (REST 401), URLs con fecha + fecha del acto en el titular ("días 25 y 26 de abril") como fallback; "El día N de mes" parte días (compartido). Carnaval con verbena, San Alejo (baile de magos).
 - Garachico: WP con plugin ?news= (sin año ni meta; vigencia por fecha visible). Patronales Santa Ana y San Roque 24 jul–16 ago; programa PDF revista escaneada 35 MB fuera de presupuesto. Plaza de La Libertad.
@@ -65,12 +65,15 @@ de los ayuntamientos (caché 1h por adaptador) y filtra verbenas con patrones.
 - Filtro: título con baile/verbena/orquesta, `amenizado por`, diccionario de
   orquestas, hora 20-23h, lugar plaza/parque. Descarte: misa, teatro, expo, cuentos.
   Títulos tipo "Fiestas de X" entran como contenedores y se parten por días.
+  Bailes ofuscados (sin keyword pero con orquesta histórica 2024-25 en
+  contexto musical) también proponen; crónicas en pasado e infantil/mayores
+  se excluyen; `Vid Band` purgada del diccionario (artefacto OCR).
 - Filtro histórico: `src/lib/data/orquestas.json` (144 orquestas con >=2
   actuaciones en 2024-25, generado con `scripts/extraer-orquestas.mjs` desde
   los archives estáticos de DeBelingo). Mencionar una suma +5. Purgados
   topónimos y genéricos ("Tenerife", "Calle", "Sergio"...) para no crear FPs.
 
-Estado: 127 eventos en 28 municipios (verificado 13-sep-2026: Santiago 3 jul-ago, Puerto 2, San Miguel 2 futuras 27/29-sep, Candelaria 5 con auto-OCR, Vilaflor 3 vía agregador, etc.). Santa Cruz: días flexibles, bailes sin hora con hora previa, penalty religioso solo sin mención explícita, dedup general con fusión. Chips y `pie-total` ya cuentan solo futuras.
+Estado: 155 eventos en 28 municipios (verificado 13-sep-2026: San Miguel 5 con verbenas ofuscadas, Candelaria 14, Los Realejos 12, etc.). Santa Cruz: días flexibles, bailes sin hora con hora previa, penalty religioso solo sin mención explícita, dedup general con fusión. Chips y `pie-total` ya cuentan solo futuras.
 - Exportar agenda: botón 📥 genera PNG de la semana (ayer→domingo) con
   html2canvas vía importmap CDN (`esm.sh`, sin bundlear) + modal
   Compartir/Descargar (adaptado de DeBelingo, sin Firebase).

@@ -1,6 +1,6 @@
 {
  "generado": "2026-09-11",
- "total": 144,
+ "total": 143,
  "orquestas": [
   {
    "nombre": "Sabrosa",
@@ -572,10 +572,6 @@
   },
   {
    "nombre": "Victoria Escudero",
-   "n": 2
-  },
-  {
-   "nombre": "Vid Band",
    "n": 2
   }
  ]

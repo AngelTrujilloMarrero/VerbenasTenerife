@@ -232,8 +232,10 @@ export function extraerOrquestas(titulo: string): string[] {
       // Preciso: "Orquesta(s) X..." + resto ("Orquestas Kimbara, The Boys
       // Machine y Samady"). Exige minúscula/marca tras el nombre para no
       // tragar la hora ("Orquesta Revelación. 23:00 + resto").
+      // SIN /i a propósito: con insensible, `\s+[a-z]` casa " Palabra" y
+      // el nombre se corta a la primera ("Swing Latinos" -> "Swing").
       // El genérico (mayúscula) cubre el resto.
-      { re: /orquestas?\s+((?:la\s+|el\s+|los\s+|las\s+)?[A-ZÁÉÍÓÚÑ][^.,;]{2,120}?)(?=\s+[a-záéíóúñ(,]|\s*,\s*|\s*\.\s|\s*$|\s+y\s+[A-ZÁÉÍÓÚÑ])/i, coma: 'solo-coma' },
+      { re: /[Oo][Rr][Qq][Uu][Ee][Ss][Tt][Aa]s?\s+((?:la\s+|el\s+|los\s+|las\s+)?[A-ZÁÉÍÓÚÑ][^.,;]{2,120}?)(?=\s+[a-záéíóúñ(,]|\s*,\s*|\s*\.\s|\s*$|\s+y\s+[A-ZÁÉÍÓÚÑ])/, coma: 'solo-coma' },
       // "Verbena con/a cargo de ... Grupo Pati, Atenia y la Orquesta Olimpia" y
       // "MEGAVERBENAZO ... con ARMONÍA SHOW ..., LEDES DÍAZ, ...".
       // Estos SÍ admiten comas (luego se parte por coma/y).
@@ -274,6 +276,10 @@ export function extraerOrquestas(titulo: string): string[] {
       const musicCtx = /orquesta|grupo|parranda|tributo|banda|d[uú]o|\bdj\b/i.test(raw);
       const n = limpia(raw);
       if (n.length < 3 || ES_ADMIN.test(n)) return;
+      // Colas subordinadas coladas al partir ("...que pondrán ritmo..."):
+      // no son nombres. Y sin una mayúscula no es nombre propio.
+      if (/^(que|para|porque|donde|cuando|como|sin)\b/i.test(n)) return;
+      if (!/[A-ZÁÉÍÓÚÑ]/.test(n)) return;
       // Fragmentos horarios colados al partir ("... Dorada Band, a las 22:00h")
       if (/^(?:a\s+las?\s+|de\s+|desde\s+las?\s+|a\s+partir\s+de\s+las?\s+)?\d{1,2}(?::\d{2})?\s*h(?:oras)?\.?$/i.test(n)) return;
       if (/^(?:a\s+las?\s+|de\s+|desde\s+las?\s+)\d/i.test(n)) return;
@@ -293,10 +299,11 @@ export function extraerOrquestas(titulo: string): string[] {
       // los rompe ("(taller de salsa Academia Ada y Belén)" -> fragmentos).
       const base = coma ? mo[1].replace(/\([^()]*\)/g, ' ') : mo[1];
       // Sin comas en la captura (patrón preciso): partir solo por "y".
-      // También se parte por ·/• ("00:00-1:30 Orquesta Tropin · 1:30 Pepe...").
+      // También se parte por ·/• ("00:00-1:30 Orquesta Tropin · 1:30 Pepe...")
+      // y por "además de" ("...Revelación, además de DJ Fabrizio" -> DJ aparte).
       const partes = coma === 'solo-coma'
         ? base.split(/\s*,\s*|\s*[·•]\s*/)
-        : base.split(coma ? /\s+y\s+|\s*,\s*(?:y\s+)?|\s*[·•]\s*/ : /\s+y\s+/);
+        : base.split(coma ? /\s+y\s+|\s*,\s*(?:y\s+)?|\s*[·•]\s*|\s*,?\s*adem[aá]s\s+(?:de\s+)?/i : /\s+y\s+/);
       partes.forEach(add);
     }
     return orq;
@@ -315,8 +322,6 @@ const TIENE_MUSICA = /orquesta|grupo|banda|dj|parranda|\bson\b|tributo|latin|ban
 // OJO \b no casa tras vocal acentuada ("reunió\b" nunca matchea en JS):
 // se testea sobre el título normalizado (sin acentos).
 const EN_PASADO_NORM = /\b(fue|fueron|tuvo|hubo|han sido|se celebro|fueron un exito|reunio|reunieron|disfruto|disfrutaron|acogio|congrego|congregaron)\b/;
-const normPasado = (s: string): string =>
-  s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 const LINEA_SIN_HORA = /(?:((?:fiesta|gran fiesta|fiesta joven)\s+y\s+))?(gran baile|gran verbena|gran verbenazo|baile popular|verbena|verbenas|verbenazo|megaverbena|baile de magos|baile de taifas?|baile de tarde|concierto bailable|tardeo|fiesta canaria|fiesta joven|noche de kioscos|noche en blanco|latinazo|baile\s+(?:al ritmo|amenizad[oa]s?|a cargo|con))\b([^.\n]{0,180}?)(?=[.]|$|\n)/gi;
 const DIAS_CORTE = /\s+(?:el\s+)?(?:lunes|martes|miércoles|miercoles|jueves|viernes|sábado|sabado|domingo)\b/i;
 
@@ -331,7 +336,7 @@ export interface BaileSinHora {
  *  1) si el propio título la trae ("a partir de las 22:30"), esa;
  *  2) si no, ÚLTIMO rango previo ("...21:30... 23:00 a 05:00..." -> 23:00);
  *  3) si no, última hora suelta previa; 4) primera hora posterior cercana. */
-export function horaPrevia(texto: string, titulo: string, radio = 250): string {
+export function horaPrevia(texto: string, titulo: string, radio = 400): string {
   const enTitulo = titulo.match(/(\d{1,2}:\d{2})/);
   if (enTitulo) return enTitulo[1];
   const idx = posEn(texto, titulo);
@@ -362,11 +367,97 @@ export function extraerBailesSinHora(textoOriginal: string): BaileSinHora[] {
     // Corta si cruza al día siguiente ("Verbena y el domingo con...") y
     // conectores colgando ("Verbena y" -> "Verbena")
     titulo = titulo.split(DIAS_CORTE)[0].replace(/\s+(y|con|de|del|el|la|los|las|e)\s*$/i, '').trim();
-    if (EN_PASADO_NORM.test(normPasado(titulo))) continue;
+    if (EN_PASADO_NORM.test(normSin(titulo))) continue;
     const orquestas = extraerOrquestas(titulo);
     // Mención vaga sin música ni desarrollo ("Verbena" a secas): fuera
     if (titulo.length < 12 && !orquestas.length) continue;
     out.push({ titulo, orquestas, explicita: !TIENE_MUSICA.test(titulo), hora: horaPrevia(texto, titulo) });
+  }
+  // Bailes ofuscados: sin keyword de baile pero con ORQUESTA HISTÓRICA
+  // (2024-25) en contexto musical ("Actuaciones de las orquestas Pasión
+  // Gomera..."). La extracción solo propone; el clasificador (>=4) filtra.
+  for (const propuesta of extraerBailesPorOrquesta(texto)) {
+    if (!out.some((x) => x.titulo === propuesta.titulo)) out.push(propuesta);
+  }
+  return out;
+}
+
+const escRe = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+interface NombreOrquesta { nombre: string; re: RegExp }
+
+let NOMBRES_ORQ: NombreOrquesta[] | null = null;
+
+/** Nombres históricos compilados una vez (misma semántica que su
+ *  consumidor: HIST como historicoEn —compuesto inclusión, token bordes—;
+ *  lista manual por inclusión como el `includes` de clasificarDetalle,
+ *  para que los stems (`malib`, `sensaci`) sigan cazando). */
+function nombresOrquesta(): NombreOrquesta[] {
+  if (NOMBRES_ORQ) return NOMBRES_ORQ;
+  NOMBRES_ORQ = [];
+  const mete = (nombre: string, bordes: boolean): void => {
+    const low = normSin(nombre);
+    const re = !bordes
+      ? new RegExp(escRe(low), 'i')
+      : new RegExp(`(^|[\\s"“”'(\\[]+)${escRe(low)}(?=$|[\\s"”').,;:!?])`, 'i');
+    NOMBRES_ORQ!.push({ nombre, re });
+  };
+  for (const { nombre } of ORQ_HIST) mete(nombre, !nombre.includes(' '));
+  for (const o of ORQUESTAS_MANO) {
+    if (!NOMBRES_ORQ.some((x) => x.nombre.toLowerCase() === o)) mete(o, false);
+  }
+  return NOMBRES_ORQ;
+}
+
+const normSin = (s: string): string =>
+  s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
+// Contexto musical mínimo para que el nombre no sea prosa ("al amanecer").
+// Rescate religioso solo con baile explícito; escuelas/talleres e
+// infantil/mayores nunca son verbena aunque toquen históricos.
+const CTX_MUSICA = /orquesta|grupo|parran|banda|\bdj\b|tributo|actuaci|ameniz|concierto|festival|verbena|baile|m[uú]sica|musical|\bnoche\b|\btarde\b/i;
+const CTX_RELIGIOSO = /misa|eucarist|procesi|rosario|funeral|entierro|parroquia|capilla|vigilia/i;
+const CTX_BAILE = /baile|verbena|verbenazo|tardeo|tributo|concierto|festival/i;
+const CTX_DESCARTE = /escuela|academia|taller|concurso|exhibici|certamen|infantil|ni[nñ]os?|beb[eé]s?|tercera edad|mayores|jubilados?|electr[oó]genos/i;
+// Titulares deportivos ("MILLA EN PISTA • 18:00 ... Orquesta X" en la misma
+// línea del programa): la carrera no es verbena aunque cite orquestas.
+const CTX_DEPORTE = /^(milla|marat[oó]n|media marat[oó]n|carrera|torneo|campeonato|partido|trail|cross|ciclismo|cicloturista|senderismo|regata|nataci[oó]n|triatl[oó]n|baloncesto|futbol|f[uú]tbol|lucha canaria)\b/i;
+
+/** Frases con orquesta histórica en contexto musical, aunque no nombren
+ *  ningún baile. Devuelve la frase como título para que puntúe. */
+export function extraerBailesPorOrquesta(texto: string): BaileSinHora[] {
+  const out: BaileSinHora[] = [];
+  const frases = texto.split(/(?<=[.\n!?])\s+/);
+  for (const f of frases) {
+    const frase = f.trim().replace(/\s+/g, ' ');
+    if (frase.length < 20) continue;
+    if (!CTX_MUSICA.test(frase)) continue;
+    if (EN_PASADO_NORM.test(normSin(frase))) continue;
+    if (CTX_RELIGIOSO.test(frase) && !CTX_BAILE.test(frase)) continue;
+    if (CTX_DESCARTE.test(frase)) continue;
+    const norm = normSin;
+    // Todos los históricos de la frase (lineup completo), no solo el primero.
+    const hallados = nombresOrquesta().filter(({ re }) => re.test(normSin(frase)));
+    if (!hallados.length) continue;
+    // Fuera número de página pegado ("8 17:30 horas - Plaza..." -> "17:30...").
+    const titulo0 = frase.length > 180 ? frase.slice(0, 180).replace(/\s+\S*$/, '').trim() : frase;
+    const titulo = titulo0.replace(/^\d{1,3}\s+(?=\d{1,2}:\d{2})/, '').trim();
+    if (CTX_DEPORTE.test(titulo)) continue;
+    const vistos = new Set<string>();
+    const orq: string[] = [];
+    for (const { nombre } of hallados) {
+      const nn = norm(nombre);
+      if ([...vistos].some((v) => v === nn || v.includes(nn) || nn.includes(v))) continue;
+      vistos.add(nn);
+      orq.push(nombre);
+    }
+    for (const o of extraerOrquestas(frase)) {
+      const no = norm(o);
+      if ([...vistos].some((v) => v === no || v.includes(no) || no.includes(v))) continue;
+      vistos.add(no);
+      orq.push(o);
+    }
+    out.push({ titulo, orquestas: orq, explicita: false, hora: horaPrevia(texto, titulo) });
   }
   return out;
 }
