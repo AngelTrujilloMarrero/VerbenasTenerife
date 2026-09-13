@@ -13,6 +13,8 @@
     "astro": "^7.3.2",
     "cheerio": "^1.0.0",
     "pdfjs-dist": "^6.3.289",
+    "pngjs": "^7.0.0",
+    "tesseract.js": "^7.0.0",
     "undici": "^7.29.1"
   },
   "devDependencies": {

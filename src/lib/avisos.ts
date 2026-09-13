@@ -5,7 +5,7 @@
 //
 // Los avisos llevan timestamp y se deduplican por (municipio, tipo, url), así
 // que un programa pendiente no spamea: aparece una vez hasta que se resuelve.
-export type TipoAviso = 'programa-pdf' | 'pdf-escaneado' | 'programa-imagen' | 'fuente-fallo' | 'sin-eventos';
+export type TipoAviso = 'programa-pdf' | 'pdf-escaneado' | 'programa-imagen' | 'ocr-en-curso' | 'fuente-fallo' | 'sin-eventos';
 
 export interface Aviso {
   at: number;

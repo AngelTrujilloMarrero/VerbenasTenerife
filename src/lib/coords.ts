@@ -20,7 +20,9 @@ export const COORDS: Record<string, { lat: number; lon: number }> = {
   guimar: { lat: 28.3156, lon: -16.4137 },
   candelaria: { lat: 28.3548, lon: -16.3716 },
   elsauzal: { lat: 28.4781, lon: -16.4357 },
-  santaursula: { lat: 28.4567, lon: -16.4900 }
+  santaursula: { lat: 28.4567, lon: -16.4900 },
+  lamatanza: { lat: 28.4569, lon: -16.4479 },
+  lavictoria: { lat: 28.4590, lon: -16.4690 }
 };
 
 export function coordsDe(municipio: string): { lat: number; lon: number } | null {

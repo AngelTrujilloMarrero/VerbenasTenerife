@@ -10,7 +10,7 @@ export interface ScoredEvent {
   esVerbena: boolean;
 }
 
-const TITULO_POS = /\b(baile|gran baile|verbena|verbenas|verbenazo|megaverbena|tardeo|concierto bailable|noche latina|noche boricua|noche de kiosc?os|baile de magos|romer[ií]a|orquesta|tributo|studio 54)\b/i;
+const TITULO_POS = /\b(baile|gran baile|gran verbena|verbena|verbenas|verbenazo|megaverbena|tardeo|concierto bailable|noche latina|noche boricua|noche en blanco|noche de kiosc?os|baile de magos|baile de taifas?|baile de tarde|romer[ií]a|orquesta|tributo|studio 54)\b/i;
 const DESC_POS = /amenizado por|amenizan|orquestas?\s*:|orquestas?\s+[A-ZÁÉÍÓÚÑ]|gran baile|noche latina/i;
 const HORA_NOCTURNA = /(19|2[0-3]|21):\d{2}/;
 
@@ -170,7 +170,7 @@ export interface SubEvento {
 const LUGAR_PREVIO = String.raw`(?:en\s+la\s+(?:plaza|parque|cancha|calle|teatro|recinto|casa|auditorio)(?:\s+(?:del?|de\s+la))?(?:\s+[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+){1,3}\s*\.?\s*)?`;
 const LINEA_BAILE = new RegExp(
   String.raw`(\d{1,2}:\d{2})\s*(?:(?:horas?|h)\b\s*\.?:?\s*)?` + LUGAR_PREVIO +
-  String.raw`[–-]?\s*([^.\n]*?(?:gran baile|baile|verbena|verbenazo|tardeo|noche latina|noche boricua)[^.\n]*)\.?\s*(?:lugar:\s*([^.\n]+))?`,
+  String.raw`[–-]?\s*([^.\n]*?(?:gran baile|baile|verbena|verbenazo|tardeo|noche latina|noche boricua|noche en blanco)[^.\n]*)\.?\s*(?:lugar:\s*([^.\n]+))?`,
   'gi'
 );
 
@@ -194,7 +194,7 @@ export function extraerSubEventos(programaTexto: string): SubEvento[] {
     let titulo = tituloRaw.trim().replace(/^[,\s:;·•\-–—]+/, '');
     // Mismo conjunto que LINEA_BAILE (incluido "baile" a secas), si no el
     // recorte no encontraba el keyword ("...se celebrará el baile de la Pamela").
-    const ki = titulo.search(/gran baile|baile|verbena|verbenazo|tardeo|noche latina|noche boricua/i);
+    const ki = titulo.search(/gran baile|baile|verbena|verbenazo|tardeo|noche latina|noche boricua|noche en blanco/i);
     if (ki > 0) {
       const prev = titulo.slice(0, ki);
       // El preámbulo suele traer la hora propia del acto ("...a las 15:00 horas
@@ -244,7 +244,7 @@ export function extraerOrquestas(titulo: string): string[] {
       // con artículo intercalado ("de la ORQUESTA") o solo DJs ("de la DJ
       // BELÉN JURADO, ..."). Exige marca musical en la captura para no traer
       // escuelas/talleres ("actuación de la Escuela de Folclore").
-      { re: /actuaciones?\s+de\s+(?:la\s+|las\s+|los\s+|el\s+)?(?=[^.;]{0,60}(?:orquesta|grupo|banda|\bdj\b|parranda|tributo))([^.;]{3,160})/i, coma: true },
+      { re: /actuaciones?\s+de\s*:?\s*(?:la\s+|las\s+|los\s+|el\s+)?(?=[^.;]{0,60}(?:orquesta|grupo|banda|\bdj\b|parranda|tributo))([^.;]{3,160})/i, coma: true },
       { re: /\bcon\s+(?:las?\s+|los\s+|el\s+|la\s+)?(?:la\s+actuaci[oó]n(?:es)?\s+de\s+|las\s+actuaciones\s+de\s+)?(?:(?:la\s+|las\s+|los\s+|el\s+)?orquestas?\s*:?\s*)?([A-ZÁÉÍÓÚÑ][^.;]{3,160})/, coma: true }
     ];
     const limpia = (s: string): string => {
@@ -313,7 +313,7 @@ export function extraerOrquestas(titulo: string): string[] {
 // La extracción solo propone; el clasificador (>=4) sigue filtrando.
 const TIENE_MUSICA = /orquesta|grupo|banda|dj|parranda|\bson\b|tributo|latin|band\b/i;
 const EN_PASADO = /\b(fue|fueron|tuvo|hubo|han sido|se celebró|fueron un éxito)\b/i;
-const LINEA_SIN_HORA = /(?:((?:fiesta|gran fiesta|fiesta joven)\s+y\s+))?(gran baile|baile popular|verbena|verbenas|baile de magos|baile de taifa|concierto bailable|tardeo|fiesta canaria|fiesta joven|noche de kioscos|baile\s+(?:al ritmo|amenizad[oa]s?|a cargo|con))\b([^.\n]{0,180}?)(?=[.]|$|\n)/gi;
+const LINEA_SIN_HORA = /(?:((?:fiesta|gran fiesta|fiesta joven)\s+y\s+))?(gran baile|gran verbena|gran verbenazo|baile popular|verbena|verbenas|verbenazo|megaverbena|baile de magos|baile de taifas?|baile de tarde|concierto bailable|tardeo|fiesta canaria|fiesta joven|noche de kioscos|noche en blanco|baile\s+(?:al ritmo|amenizad[oa]s?|a cargo|con))\b([^.\n]{0,180}?)(?=[.]|$|\n)/gi;
 const DIAS_CORTE = /\s+(?:el\s+)?(?:lunes|martes|miércoles|miercoles|jueves|viernes|sábado|sabado|domingo)\b/i;
 
 export interface BaileSinHora {
@@ -584,7 +584,7 @@ export function tipoDeEvento(titulo: string): string {
   if (/baile de taifa/i.test(titulo)) return 'Taifa';
   if (/romer[ií]a/i.test(titulo)) return 'Romería';
   if (/inclusiva/i.test(titulo)) return 'Inclusiva';
-  if (/noche latina|noche boricua|tributo|studio 54|concierto|festival/i.test(titulo)) return 'Concierto';
+  if (/noche latina|noche boricua|noche en blanco|tributo|studio 54|concierto|festival/i.test(titulo)) return 'Concierto';
   if (/baile|tardeo|verbena|verbenazo/i.test(titulo)) return 'Baile Normal';
   if (/fiestas mayores|fiestas de/i.test(titulo)) return 'Fiestas';
   return 'Otro';

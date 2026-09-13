@@ -4,6 +4,8 @@
 import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { avisar } from './avisos.js';
 import { fetchBytes } from './http.js';
+import { textoOcr } from './ocr.js';
+import { lanzarOcrAuto, leerOcrAuto } from './ocr-auto.js';
 
 export interface PdfTexto {
   url: string;
@@ -125,12 +127,27 @@ export async function obtenerTextoPdf(url: string, maxBytes = 30 * 1024 * 1024, 
       m === m.toUpperCase() ? 'OCTUBRE' : m[0] === m[0].toUpperCase() ? 'Octubre' : 'octubre');
   const texto = sinControles.replace(/[\s\u00A0]+/g, ' ').replace(/\n\s*\n+/g, '\n').trim();
   const pdf: PdfTexto = { url, texto, paginas: doc.numPages, escaneado: texto.length < 200 };
-  cache.set(url, { at: Date.now(), pdf });
-  // Un PDF escaneado nuevo se avisa solo (monitor /api/estado.json); el
-  // adaptador decide si lo salta u OCR-ea. Sin municipio no se puede asignar.
+  // PDF escaneado con municipio: primero el OCR manual versionado (mejor
+  // calidad, el adaptador ya lo habrá usado si existe para esta URL), si no
+  // el automático en 2º plano (ver ocr-auto.ts): entra solo en el siguiente
+  // ciclo. Sin municipio no se puede asignar ni cachear.
   if (pdf.escaneado && municipio) {
+    const claveOcr = municipio.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, '');
+    const ocrPrevio = textoOcr(claveOcr);
+    // El manual solo cubre su propia URL; el resto de programas escaneados
+    // del mismo municipio sí optan al automático.
+    if (!(ocrPrevio?.texto && ocrPrevio.fuente === url)) {
+      const auto = leerOcrAuto(url);
+      if (auto?.texto) {
+        const conOcr: PdfTexto = { url, texto: auto.texto, paginas: auto.paginas, escaneado: false };
+        cache.set(url, { at: Date.now(), pdf: conOcr });
+        return conOcr;
+      }
+      lanzarOcrAuto(url, municipio);
+    }
     avisar(municipio, 'pdf-escaneado', url, `sin texto (${doc.numPages} págs, pendiente OCR)`);
   }
+  cache.set(url, { at: Date.now(), pdf });
   return pdf;
 }
 
