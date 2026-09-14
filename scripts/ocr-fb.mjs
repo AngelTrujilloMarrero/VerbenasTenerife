@@ -26,6 +26,37 @@ const TIMEOUT_MS = 90 * 1000;
 const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
 
 const RE_VERBENA = /(gran baile|baile|verbena|verbenazo|tardeo|noche latina|noche en blanco|latinazo|baile de magos|orquesta|fiestas?|festejos|programa de (fiestas|actos)|cartel)/i;
+const VISION_MODEL = process.env.IA_VISION_MODEL || 'nex-agi/nex-n2.5-pro:free';
+
+function envLocal(k) {
+  if (process.env[k]) return process.env[k].trim();
+  try {
+    const m = fs.readFileSync(path.join(ROOT, '.env'), 'utf8').match(new RegExp(`^${k}=(.*)$`, 'm'));
+    return (m?.[1] || '').trim();
+  } catch { return ''; }
+}
+// ¿Aporta señal útil (fecha/hora/orquesta/keyword)? Si no, el tesseract falló.
+function conSenal(t) {
+  return RE_VERBENA.test(t) || /\d{1,2}:\d{2}/.test(t) ||
+    /enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|setiembre|octubre|noviembre|diciembre|lunes|martes|miércoles|miercoles|jueves|viernes|sábado|sabado|domingo|20\d{2}/i.test(t);
+}
+// Visión por IA (OpenRouter :free con imagen): para carteles donde el
+// tesseract no da señal. 1 petición por imagen; respeta --max-vision.
+async function visionTranscribir(url, apiKey, modelo) {
+  const r = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+    signal: AbortSignal.timeout(120000),
+    body: JSON.stringify({ model: modelo, temperature: 0.1, max_tokens: 800,
+      messages: [{ role: 'user', content: [
+        { type: 'text', text: 'Transcribe TODO el texto visible de este cartel de fiestas (fechas, horas, lugares, orquestas, actos). Solo la transcripción, sin comentarios.' },
+        { type: 'image_url', image_url: { url } } ] }] }) });
+  if (!r.ok) throw new Error(`vision HTTP ${r.status}`);
+  const j = await r.json();
+  const msg = j.choices?.[0]?.message || {};
+  const txt = String(msg.content || msg.reasoning || '').replace(/```/g, '').trim();
+  if (txt.length < 40) throw new Error('visión sin texto útil');
+  return txt;
+}
 
 const sha1 = (s) => createHash('sha1').update(s).digest('hex');
 const conTimeout = (p, ms) => new Promise((res, rej) => {
@@ -64,7 +95,7 @@ async function descargar(url) {
   return buf;
 }
 
-export async function ocrFotosPosts({ solo = '', maxTotal = MAX_TOTAL, forzar = false } = {}) {
+export async function ocrFotosPosts({ solo = '', maxTotal = MAX_TOTAL, maxVision = Number(args['max-vision'] || 10), forzar = false } = {}) {
   const ficheros = fs.existsSync(POSTS_DIR)
     ? fs.readdirSync(POSTS_DIR).filter((x) => x.endsWith('.json') && (!solo || x.includes(solo)))
     : [];
@@ -89,6 +120,9 @@ export async function ocrFotosPosts({ solo = '', maxTotal = MAX_TOTAL, forzar = 
   console.log(`OCR-FB: ${cola.length} posts, ${totalImgs} imágenes (cap ${maxTotal})`);
   if (!cola.length) return { posts: 0, imagenes: 0, caracteres: 0 };
   const worker = await createWorker('spa', OEM.LSTM_ONLY, { cachePath: TESSDATA });
+  const visionKey = envLocal('OPENROUTER_API_KEY');
+  const visionModelo = envLocal('IA_VISION_MODEL') || VISION_MODEL;
+  let visiones = 0;
   let hechas = 0, caracteres = 0, postsOk = 0;
   try {
     for (const c of cola) {
@@ -103,12 +137,29 @@ export async function ocrFotosPosts({ solo = '', maxTotal = MAX_TOTAL, forzar = 
           const { data } = await conTimeout(worker.recognize(buf), TIMEOUT_MS);
           const limpio = String(data?.text || '').replace(/[ \t]+\n/g, '\n').trim();
           hechas++;
-          if (limpio.length > 40) {
+          if (limpio.length > 40 && conSenal(limpio)) {
             guardarOcrFb(u, limpio);
             textos.push(limpio);
             caracteres += limpio.length;
           } else {
-            console.log(`  poco texto (${limpio.length}) ${u.slice(0, 80)}`);
+            // Tesseract sin señal útil → visión IA (si hay clave y cupo).
+            console.log(`  tesseract sin señal (${limpio.length} car.), probando visión…`);
+            if (!visionKey) { console.log('  sin OPENROUTER_API_KEY: se omite visión'); continue; }
+            if (visiones >= maxVision) { console.log(`  cap visión (${maxVision}) alcanzado`); continue; }
+            try {
+              const vt = await visionTranscribir(u, visionKey, visionModelo);
+              visiones++;
+              if (conSenal(vt)) {
+                guardarOcrFb(u, vt);
+                textos.push(vt);
+                caracteres += vt.length;
+                console.log(`  visión OK (${vt.length} car.)`);
+              } else {
+                console.log('  visión también sin señal, se descarta');
+              }
+            } catch (e2) {
+              console.log(`  visión fallo: ${String(e2.message || e2).slice(0, 80)}`);
+            }
           }
         } catch (e) {
           console.log(`  omitida ${u.slice(0, 80)}: ${String(e.message || e).slice(0, 80)}`);
@@ -128,11 +179,11 @@ export async function ocrFotosPosts({ solo = '', maxTotal = MAX_TOTAL, forzar = 
   } finally {
     await worker.terminate().catch(() => {});
   }
-  console.log(`OCR-FB listo: ${postsOk} posts con texto (${caracteres} caracteres, ${hechas} imágenes)`);
-  return { posts: postsOk, imagenes: hechas, caracteres };
+  console.log(`OCR-FB listo: ${postsOk} posts con texto (${caracteres} caracteres, ${hechas} tesseract, ${visiones} visión)`);
+  return { posts: postsOk, imagenes: hechas, visiones, caracteres };
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] || '').href) {
-  ocrFotosPosts({ solo: String(args.solo || ''), maxTotal: MAX_TOTAL, forzar: !!args.forzar })
+  ocrFotosPosts({ solo: String(args.solo || ''), maxTotal: MAX_TOTAL, maxVision: Number(args['max-vision'] || 10), forzar: !!args.forzar })
     .catch((e) => { console.error('OCR-FB FALLO:', e.message); process.exit(1); });
 }
