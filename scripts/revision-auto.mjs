@@ -249,6 +249,11 @@ for (const e of pre) {
   }
   // Sin veredicto IA rige la regex (>=4); con veredicto favorable basta >=2.
   if (!v && score < 4) continue;
+  // La fecha que da la IA también se valida: si ya pasó, fuera.
+  if (eventoDay) {
+    const [ed, em, ey] = eventoDay.split('-').map(Number);
+    if (ey && em && ed && new Date(ey, em - 1, ed) < hoy0()) { eventosPasados++; continue; }
+  }
   const orquestas = [...(e.ho ? [e.ho.split(' (')[0]] : []), ...orqExtra].filter(Boolean);
   candidatas.push({
     id: idPost(e.cuenta, { url: e.url, texto: e.texto }),
