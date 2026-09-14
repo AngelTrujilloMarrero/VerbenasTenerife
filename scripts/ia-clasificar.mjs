@@ -57,12 +57,12 @@ async function loteGemini(lote, hoy, apiKey, model) {
   return extraerArray(txt);
 }
 
-async function loteOpenAI(lote, hoy, base, apiKey, model, nombre) {
+async function loteOpenAI(lote, hoy, base, apiKey, model, nombre, cuentaGasto) {
   const r = await fetch(`${base}/chat/completions`, {
     method: 'POST', headers: { 'Content-Type': 'application/json', ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}) },
     signal: AbortSignal.timeout(90000),
     body: JSON.stringify({
-      model, temperature: 0.1, max_tokens: 4000,
+      model, temperature: 0.1, max_tokens: 2000,
       messages: [
         { role: 'system', content: 'Devuelves SOLO JSON válido, sin explicaciones.' },
         { role: 'user', content: prompt(hoy, lote) }
@@ -70,14 +70,28 @@ async function loteOpenAI(lote, hoy, base, apiKey, model, nombre) {
     }) });
   if (!r.ok) throw new Error(`${nombre} HTTP ${r.status}`);
   const j = await r.json();
+  if (cuentaGasto && j.usage) {
+    cuentaGasto.tokens += (j.usage.prompt_tokens || 0) + (j.usage.completion_tokens || 0);
+    cuentaGasto.costeUSD += (j.usage.prompt_tokens || 0) * PRECIO_DEEPSEEK.in
+      + (j.usage.completion_tokens || 0) * PRECIO_DEEPSEEK.out;
+  }
   return extraerArray(j.choices?.[0]?.message?.content);
 }
 
-/** posts: [{indice, cuenta, fechaPost, texto}]. Devuelve Map indice->veredicto. */
+/** posts: [{indice, cuenta, fechaPost, texto}]. Devuelve {veredictos, gasto}.
+ *  gasto: {proveedor, tokens, costeUSD} aprox del proveedor de pago (si se usó).
+ *  Precios DeepSeek (revisar si cambian): $0.27/1M input, $1.10/1M output. */
+const PRECIO_DEEPSEEK = { in: 0.27 / 1e6, out: 1.1 / 1e6 };
 export async function verificarConIA(posts, cfg = {}) {
   const out = new Map();
-  if (!posts.length) return out;
+  const gasto = { proveedor: null, tokens: 0, costeUSD: 0 };
+  if (!posts.length) return { veredictos: out, gasto };
   const hoy = cfg.hoy;
+  // DeepSeek (PAGO) solo si IA_PAGO=1: va el ÚLTIMO, solo gasta si todo lo
+  // gratis falló. Cap de seguridad: MAX_IA_POSTS.
+  const maxPosts = cfg.maxPosts || 120;
+  const lista = posts.slice(0, maxPosts);
+  if (posts.length > maxPosts) console.warn(`IA: cap ${maxPosts} posts (había ${posts.length})`);
   const proveedores = [];
   if (cfg.geminiKey) {
     const model = cfg.geminiModel || 'gemini-2.5-flash';
@@ -89,11 +103,15 @@ export async function verificarConIA(posts, cfg = {}) {
   if (cfg.openrouterKey) {
     proveedores.push({ nombre: 'OpenRouter', fn: (l) => loteOpenAI(l, hoy, 'https://openrouter.ai/api/v1', cfg.openrouterKey, cfg.openrouterModel || 'meta-llama/llama-3.3-70b-instruct:free', 'OpenRouter') });
   }
+  if (cfg.deepseekKey && cfg.pago) {
+    proveedores.push({ nombre: 'DeepSeek*', pago: true,
+      fn: (l) => loteOpenAI(l, hoy, 'https://api.deepseek.com', cfg.deepseekKey, cfg.deepseekModel || 'deepseek-chat', 'DeepSeek', gasto) });
+  }
   // Siempre disponible, sin clave (anónimo: 1 req/15s).
   proveedores.push({ nombre: 'Pollinations', fn: (l) => loteOpenAI(l, hoy, 'https://text.pollinations.ai/openai', '', 'openai', 'Pollinations'), pausa: 16000 });
 
-  for (let i = 0; i < posts.length; i += BATCH) {
-    const lote = posts.slice(i, i + BATCH);
+  for (let i = 0; i < lista.length; i += BATCH) {
+    const lote = lista.slice(i, i + BATCH);
     let ok = false;
     for (const p of proveedores) {
       // Un reintento por proveedor (los tiers gratuitos estrangulan a ratos).
@@ -109,10 +127,13 @@ export async function verificarConIA(posts, cfg = {}) {
           console.warn(`IA ${p.nombre}: fallo lote ${i / BATCH + 1} intento ${intento + 1} (${String(e.message || e).split('\n')[0].slice(0, 100)})`);
         }
       }
-      if (ok) break;
+      if (ok) { if (p.pago) gasto.proveedor = p.nombre; break; }
     }
     if (!ok) console.warn(`IA: lote ${i / BATCH + 1} sin veredicto, decide la regex`);
     else await new Promise((r) => setTimeout(r, 1000));
   }
-  return out;
+  if (gasto.proveedor) {
+    console.log(`IA gasto: ${gasto.tokens} tokens en ${gasto.proveedor} ≈ $${gasto.costeUSD.toFixed(4)}`);
+  }
+  return { veredictos: out, gasto };
 }

@@ -197,18 +197,25 @@ if (fs.existsSync(POSTS_DIR)) {
 
 // ---------- 2a. Verificación IA (opcional; sin clave, manda la regex) ----------
 const GEMINI_KEY = args['sin-ia'] ? '' : envLocal('GEMINI_API_KEY');
-const GEMINI_MODEL = envLocal('GEMINI_MODEL') || 'gemini-2.0-flash';
+const GEMINI_MODEL = envLocal('GEMINI_MODEL') || 'gemini-2.5-flash';
+const GROQ_KEY = args['sin-ia'] ? '' : envLocal('GROQ_API_KEY');
+const OPENROUTER_KEY = args['sin-ia'] ? '' : envLocal('OPENROUTER_API_KEY');
+const SOLO_REGEX = args['sin-ia'] || args['solo-regex'] ? true : false;
 let veredictos = new Map();
 {
   const hoyDmy = (() => { const d = new Date(); return `${String(d.getDate()).padStart(2, '0')}-${String(d.getMonth() + 1).padStart(2, '0')}-${d.getFullYear()}`; })();
-  if (GEMINI_KEY && pre.length) {
-    console.log(`2a/3 Verificando ${pre.length} posts con IA (${GEMINI_MODEL})…`);
-    veredictos = await verificarConIA(
+  if (!SOLO_REGEX && pre.length) {
+    const via = GEMINI_KEY ? `Gemini ${GEMINI_MODEL}` : GROQ_KEY ? 'Groq' : OPENROUTER_KEY ? 'OpenRouter' : 'Pollinations (sin clave)';
+    console.log(`2a/3 Verificando ${pre.length} posts con IA (vía ${via})…`);
+    const resIA = await verificarConIA(
       pre.map((e) => ({ indice: e.indice, cuenta: e.cuenta, fechaPost: e.fecha || `hace ${e.dias} días`, texto: e.texto })),
-      { apiKey: GEMINI_KEY, model: GEMINI_MODEL, hoy: hoyDmy });
+      { geminiKey: GEMINI_KEY, geminiModel: GEMINI_MODEL, groqKey: GROQ_KEY, openrouterKey: OPENROUTER_KEY,
+        deepseekKey: envLocal('DEEPSEEK_API_KEY'), pago: envLocal('IA_PAGO') === '1',
+        maxPosts: Number(envLocal('MAX_IA_POSTS') || 120), hoy: hoyDmy });
+    veredictos = resIA.veredictos;
     console.log(`IA: ${veredictos.size} veredictos de ${pre.length}`);
-  } else {
-    console.log('2a/3 IA omitida (sin GEMINI_API_KEY o --sin-ia): decide la regex.');
+  } else if (pre.length) {
+    console.log('2a/3 IA omitida (--sin-ia): decide la regex.');
   }
 }
 
