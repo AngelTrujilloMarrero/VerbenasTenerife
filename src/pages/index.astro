@@ -499,8 +499,9 @@ const fbOn = !!(fbConfig.apiKey && fbConfig.databaseURL);
     // `fb_candidatos` y aparecen aquí debajo de los eventos con fecha.
     function renderBD(meta, guardados, fbLista) {
       const nombreFuente = (id) => (fuentes.find((f) => f.id === id) || {}).nombre || id;
-      // Eventos con fecha, de más próximos a más antiguos
-      const evs = [...todas].sort(ordFut);
+      // Eventos con fecha, de más próximos a más antiguos (solo futuras:
+      // las pasadas se obvian, siguen en la API con ?filtro=pasadas).
+      const evs = [...todas].filter((v) => v.futura).sort(ordFut);
       const grupos = {};
       evs.forEach((v) => { (grupos[v.day || ''] = grupos[v.day || ''] || []).push(v); });
       const dias = Object.keys(grupos).sort((x, y) => (aFecha(x) - aFecha(y)) || x.localeCompare(y));
@@ -513,7 +514,7 @@ const fbOn = !!(fbConfig.apiKey && fbConfig.databaseURL);
             `<span class="lug"> · ${esc(v.lugar ? v.lugar + ', ' : '')}${esc(v.municipio)}</span>` +
             (orq ? ` <span class="orq">🎵 ${esc(orq)}</span>` : '') +
             `<span class="bd-fuente">${esc(nombreFuente(v.fuente))}</span>`;
-          return `<div class="bd-item">${v.futura ? cuerpo : `<s>${cuerpo}</s>`}</div>`;
+          return `<div class="bd-item">${cuerpo}</div>`;
         }).join('')
       ).join('') || '<p class="vacio">Sin eventos guardados.</p>';
       // Hallazgos de Facebook (sin fecha exacta del evento): por score
