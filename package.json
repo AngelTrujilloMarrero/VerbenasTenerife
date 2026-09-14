@@ -11,6 +11,7 @@
     "fb:login": "node scripts/monitor-facebook-browser.mjs --login",
     "fb:probar": "node scripts/monitor-facebook-browser.mjs --cuenta=aytofuencaliente",
     "fb:seguidos": "node scripts/extraer-seguidos.mjs",
+    "fb:revision": "node scripts/revision-auto.mjs",
     "fb:importar": "node scripts/importar-seguidos.mjs"
   },
   "dependencies": {
