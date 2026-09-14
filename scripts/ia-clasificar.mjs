@@ -106,7 +106,8 @@ export async function verificarConIA(posts, cfg = {}) {
     proveedores.push({ nombre: 'Groq', fn: (l) => loteOpenAI(l, hoy, 'https://api.groq.com/openai/v1', cfg.groqKey, cfg.groqModel || 'llama-3.3-70b-versatile', 'Groq') });
   }
   if (cfg.openrouterKey) {
-    proveedores.push({ nombre: 'OpenRouter', fn: (l) => loteOpenAI(l, hoy, 'https://openrouter.ai/api/v1', cfg.openrouterKey, cfg.openrouterModel || 'meta-llama/llama-3.3-70b-instruct:free', 'OpenRouter') });
+    // El roster :free rota; ver modelos gratis hoy en openrouter.ai/models?q=free.
+    proveedores.push({ nombre: 'OpenRouter', fn: (l) => loteOpenAI(l, hoy, 'https://openrouter.ai/api/v1', cfg.openrouterKey, cfg.openrouterModel || 'nvidia/nemotron-3.5-lightning:free', 'OpenRouter') });
   }
   if (cfg.deepseekKey && cfg.pago) {
     proveedores.push({ nombre: 'DeepSeek*', pago: true,
