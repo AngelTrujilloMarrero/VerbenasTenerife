@@ -103,7 +103,8 @@ if (fs.existsSync(POSTS_DIR)) {
         candidatas.push({
           id: 'fb-' + Buffer.from(p.url || (d.cuenta + p.texto.slice(0, 40))).toString('base64').replace(/[^a-z0-9]/gi, '').slice(0, 24),
           cuenta: d.cuenta, fecha: p.fecha || '', dias, url: p.url || '',
-          texto: p.texto.slice(0, 600), score, motivos, revisadoEl: d.revisadoEl
+          texto: p.texto.slice(0, 600), fotos: (p.imagenes || []).slice(0, 4), pdfs: p.pdfs || [],
+          score, motivos, revisadoEl: d.revisadoEl
         });
       }
     }
@@ -118,12 +119,18 @@ let md = `# Revisión Facebook ${hoy}\n\nCuentas: ${cuentas} · Posts: ${totalPo
 if (candidatas.length) {
   md += `## Candidatas (score ≥ 4)\n\n`;
   for (const c of candidatas) {
-    md += `### ${c.cuenta} · ${c.fecha || 's/f'} · score ${c.score}\n${c.motivos.join(' · ')}\n\n> ${c.texto.slice(0, 400).replace(/\n/g, ' ')}\n\n${c.url}\n\n`;
+    md += `### ${c.cuenta} · ${c.fecha || 's/f'} · score ${c.score}\n${c.motivos.join(' · ')}\n\n> ${c.texto.slice(0, 400).replace(/\n/g, ' ')}\n\n${c.url}\n`;
+    if (c.fotos.length) md += `\nFotos (${c.fotos.length}):\n` + c.fotos.map((f) => `- ${f}`).join('\n') + '\n';
+    if (c.pdfs.length) md += `\nPDFs:\n` + c.pdfs.map((f) => `- ${f}`).join('\n') + '\n';
+    md += '\n';
   }
 } else {
   md += `Sin candidatas esta vez.\n`;
 }
 fs.writeFileSync(informe, md);
+// Listado completo para la web (/api/fb-candidatas lo sirve si no hay Firebase).
+fs.writeFileSync(path.join(ROOT, '.cache', 'fb-candidatas.json'),
+  JSON.stringify({ actualizadoEl: new Date().toISOString(), cuentas, posts: totalPosts, candidatas }, null, 2));
 console.log(`3/3 Informe: .cache/fb-revision-${hoy}.md (${candidatas.length} candidatas de ${totalPosts} posts en ${cuentas} cuentas)`);
 
 // Volcado a Firebase con Admin SDK (lectura pública, escritura solo servidor).

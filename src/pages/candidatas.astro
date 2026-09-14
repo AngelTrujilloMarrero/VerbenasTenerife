@@ -1,0 +1,104 @@
+---
+export const prerender = false;
+---
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Candidatas Facebook — Verbenas Tenerife</title>
+  <style is:global>
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: system-ui, -apple-system, sans-serif; background: #111827; color: #fff; }
+    a { color: #93c5fd; }
+    .cabecera { background: #2563eb; padding: 12px 8px; text-align: center; }
+    @media (min-width: 768px) { .cabecera { background: linear-gradient(to right, #2563eb, #9333ea); } }
+    .cabecera h1 { margin: 0; font-size: 1.4rem; font-weight: 800; }
+    .cabecera p { margin: 4px 0 0; color: #dbeafe; font-size: 13px; }
+    .top-nav { text-align: center; padding: 10px; font-size: 14px; }
+    .wrap { max-width: 860px; margin: 0 auto; padding: 0 16px 32px; }
+    .busca { width: 100%; background: #1f2937; color: #fff; border: 1px solid #374151; border-radius: 8px; padding: 10px 14px; font-size: 15px; margin: 12px 0; }
+    .card { background: #1f2937; border: 1px solid #374151; border-left: 4px solid #a855f7; border-radius: 10px; padding: 14px 16px; margin-bottom: 12px; }
+    .card .meta { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-size: 13px; color: #9ca3af; margin-bottom: 8px; }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; }
+    .score { background: rgba(168,85,247,.2); color: #d8b4fe; font-weight: 800; }
+    .motivos { color: #6ee7b7; font-size: 12px; }
+    .texto { font-size: 15px; line-height: 1.5; white-space: pre-wrap; }
+    .fotos { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+    .fotos img { width: 140px; height: 100px; object-fit: cover; border-radius: 8px; border: 1px solid #374151; }
+    .pdfs { margin-top: 10px; display: flex; gap: 8px; flex-wrap: wrap; }
+    .btn-pdf { display: inline-flex; gap: 6px; padding: 8px 14px; border-radius: 8px; font-size: 13px; font-weight: 700; text-decoration: none;
+      background: rgba(127,29,29,.5); color: #fca5a5; border: 1px solid rgba(239,68,68,.3); }
+    .btn-fb { display: inline-block; margin-top: 10px; font-size: 13px; }
+    .muted { color: #9ca3af; font-size: 13px; text-align: center; }
+    .vacio { text-align: center; color: #9ca3af; padding: 40px 0; }
+  </style>
+</head>
+<body>
+  <header class="cabecera">
+    <h1>🔎 Candidatas de Facebook</h1>
+    <p id="sub">Listado completo de la base de datos · texto + fotos + PDFs</p>
+  </header>
+  <nav class="top-nav"><a href="/">← Verbenas</a> · <a href="/cuentas">📘 Cuentas</a></nav>
+
+  <div class="wrap">
+    <input class="busca" id="busca" placeholder="Filtrar por texto, cuenta u orquesta…" />
+    <p class="muted" id="info">Cargando…</p>
+    <main id="lista"></main>
+  </div>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    let todas = [];
+    const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) =>
+      ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+    function tarjeta(c) {
+      const fotos = (c.fotos || []).map((f) =>
+        `<a href="${esc(f)}" target="_blank" rel="noopener"><img src="${esc(f)}" loading="lazy" alt="Foto del post" /></a>`).join('');
+      const pdfs = (c.pdfs || []).map((p) =>
+        `<a class="btn-pdf" href="${esc(p)}" target="_blank" rel="noopener">📄 ${esc(decodeURIComponent(p.split('/').pop().split('?')[0]).slice(0, 40) || 'Ver PDF')}</a>`).join('');
+      return `
+      <article class="card">
+        <div class="meta">
+          <strong>${esc(c.cuenta)}</strong>
+          <span>${esc(c.fecha || 's/f')}</span>
+          <span class="badge score">score ${c.score ?? ''}</span>
+        </div>
+        <div class="motivos">${esc((c.motivos || []).join(' · '))}</div>
+        <p class="texto">${esc(c.texto)}</p>
+        ${fotos ? `<div class="fotos">${fotos}</div>` : ''}
+        ${pdfs ? `<div class="pdfs">${pdfs}</div>` : ''}
+        ${c.url ? `<a class="btn-fb" href="${esc(c.url)}" target="_blank" rel="noopener">🔗 Ver post en Facebook</a>` : ''}
+      </article>`;
+    }
+
+    function render() {
+      const q = $('busca').value.toLowerCase().trim();
+      const lista = q
+        ? todas.filter((c) => ((c.texto || '') + ' ' + (c.cuenta || '') + ' ' + (c.motivos || []).join(' ')).toLowerCase().includes(q))
+        : todas;
+      $('lista').innerHTML = lista.length
+        ? lista.map(tarjeta).join('')
+        : '<p class="vacio">Sin candidatas con ese filtro.</p>';
+    }
+
+    async function main() {
+      try {
+        const r = await fetch('/api/fb-candidatas');
+        const d = await r.json();
+        if (!d.ok) throw new Error(d.error || 'fallo');
+        todas = d.candidatas || [];
+        const fuente = d.fuente === 'db' ? 'Firebase' : d.fuente === 'local' ? 'revisión local' : '—';
+        $('info').textContent = `${d.total} candidatas · fuente: ${fuente}` +
+          (d.meta?.at || d.meta?.actualizadoEl ? ` · actualizado: ${esc(d.meta.at ? new Date(d.meta.at).toLocaleString('es-ES') : d.meta.actualizadoEl)}` : '') +
+          (d.aviso ? ` · ${d.aviso}` : '');
+        render();
+      } catch (e) {
+        $('info').textContent = 'Error: ' + e.message;
+      }
+    }
+    $('busca').addEventListener('input', render);
+    main();
+  </script>
+</body>
+</html>

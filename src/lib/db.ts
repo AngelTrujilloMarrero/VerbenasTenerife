@@ -150,6 +150,19 @@ export async function borrarCuentaFB(id: string): Promise<boolean> {
     return false;
   }
 }
+/** Lee un nodo entero de RTDB (objeto o null si no hay DB/fallo). */
+export async function leerNodoFB(nodo: string): Promise<Record<string, any> | null> {
+  const base = db();
+  if (!base) return null;
+  try {
+    const snap = await base.ref(nodo).get();
+    return snap.exists() ? snap.val() : {};
+  } catch (e) {
+    console.error(`db: leer ${nodo} fallo`, (e as Error)?.message || e);
+    return null;
+  }
+}
+
 /** Borra eventos con day anterior a hoy-N días. Devuelve cuántos. */
 export async function purgarAntiguas(dias = 2): Promise<number> {
   const base = db();

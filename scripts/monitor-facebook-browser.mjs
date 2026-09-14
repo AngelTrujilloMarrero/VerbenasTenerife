@@ -100,8 +100,17 @@ async function extraerPosts(page, max) {
       'div[role="article"]',
       (els, n) => els.map((a) => {
         const texto = (a.innerText || '').slice(0, 2000).trim();
-        const links = [...a.querySelectorAll('a')].map((x) => x.href)
+        const hrefs = [...a.querySelectorAll('a')].map((x) => x.href);
+        const links = hrefs
           .filter((h) => /\/(posts|photo|reel)\/|fbid=|story_fbid=/.test(h));
+        // PDFs: directos, Drive, o tras el redirector l.php?u=<url real>
+        const pdfs = [...new Set(hrefs.map((h) => {
+          try {
+            const u = new URL(h);
+            if (u.pathname === '/l.php' && u.searchParams.get('u')) return u.searchParams.get('u');
+            return h;
+          } catch { return h; }
+        }).filter((h) => /\.pdf(\?|#|$)/i.test(h) || /drive\.google\.com/i.test(h)))].slice(0, 4);
         const imgs = [...a.querySelectorAll('img')].map((im) => im.src)
           .filter((s) => s.startsWith('http') && !s.includes('emoji'));
         const t = a.querySelector('time');
@@ -110,6 +119,7 @@ async function extraerPosts(page, max) {
           texto,
           url: links[0] || '',
           imagenes: imgs.slice(0, 4),
+          pdfs,
           fecha: t?.getAttribute('datetime') || rel
         };
       }),
@@ -169,7 +179,7 @@ async function main() {
       fs.writeFileSync(path.join(OUTDIR, `${slug}.json`),
         JSON.stringify({ cuenta, url, revisadoEl: new Date().toISOString(), posts }, null, 2));
       console.log(`${posts.length} posts ✓`);
-      posts.forEach((p, k) => console.log(`   ${k + 1}. [${p.fecha || '?fecha'}] ${p.texto.slice(0, 120).replace(/\n/g, ' ')}`));
+      posts.forEach((p, k) => console.log(`   ${k + 1}. [${p.fecha || '?fecha'}]${(p.pdfs || []).length ? ' 📄PDF' : ''}${(p.imagenes || []).length ? ` 🖼×${p.imagenes.length}` : ''} ${p.texto.slice(0, 120).replace(/\n/g, ' ')}`));
     } catch (e) {
       console.log('ERROR:', e.message?.split('\n')[0]);
     }
