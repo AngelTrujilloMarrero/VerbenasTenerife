@@ -104,8 +104,40 @@ function idPost(cuenta, p) {
 }
 
 const candidatas = [];
+
+// Fecha del EVENTO mencionado en el texto, relativa al día del post
+// (revisadoEl - dias). Devuelve Date o null si no hay pista. Si el evento ya
+// pasó (ej. post de hace 4 días diciendo "esta noche"), se excluye: es pasado.
+const SEM_LUN = { lunes: 0, martes: 1, miercoles: 2, jueves: 3, viernes: 4, sabado: 5, domingo: 6 };
+const MESES_IDX = { ene: 0, feb: 1, mar: 2, abr: 3, may: 4, jun: 5, jul: 6, ago: 7, sep: 8, oct: 9, nov: 10, dic: 11 };
+const normD = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+function fechaEvento(postISO, diasPost, texto) {
+  const t = normD(texto);
+  const post = new Date(postISO);
+  post.setHours(12, 0, 0, 0);
+  post.setDate(post.getDate() - (diasPost || 0));
+  const mas = (n) => { const d = new Date(post); d.setDate(d.getDate() + n); return d; };
+  const dowMon = (post.getDay() + 6) % 7; // lunes=0
+  if (/\b(hoy|esta noche|esta tarde|esta manana)\b/.test(t)) return post;
+  if (/\bpasado manana\b/.test(t)) return mas(2);
+  if (/\bmanana\b/.test(t)) return mas(1);
+  if (/\beste\s+(fin de semana|finde)\b/.test(t)) return mas(5 - dowMon); // sábado de su semana
+  let m = t.match(/\beste\s+(lunes|martes|miercoles|jueves|viernes|sabado|domingo)\b/);
+  if (m) return mas(SEM_LUN[m[1]] - dowMon); // misma semana (si ya pasó, sale pasado)
+  m = t.match(/\bel\s+(lunes|martes|miercoles|jueves|viernes|sabado|domingo)\b/);
+  if (m) return mas(((SEM_LUN[m[1]] - dowMon + 7) % 7) || 7); // próximo venidero
+  m = t.match(/(\d{1,2})\s*de\s*(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|setiembre|octubre|noviembre|diciembre)/);
+  if (m) {
+    const d = new Date(post.getFullYear(), MESES_IDX[m[2].slice(0, 3)], Number(m[1]), 12);
+    if (d.getTime() > mas(180).getTime()) d.setFullYear(d.getFullYear() - 1); // "10 de enero" en septiembre = pasado
+    return d;
+  }
+  return null;
+}
+const dmyDe = (d) => `${String(d.getDate()).padStart(2, '0')}-${String(d.getMonth() + 1).padStart(2, '0')}-${d.getFullYear()}`;
+const hoy0 = () => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; };
 const senales = []; // {tipo: 'cancelacion'|'retomar', orquesta, cuenta, url, texto, fecha}
-let totalPosts = 0, cuentas = 0, reelsOmitidos = 0;
+let totalPosts = 0, cuentas = 0, reelsOmitidos = 0, eventosPasados = 0;
 // Reel aunque venga sin marcar de extracciones viejas (url /reel/ o duración).
 const esReel = (p) => p.esReel === true || /\/reel\//.test(p.url || '') || /\d+:\d+\s*\/\s*\d+:\d+/.test(p.texto || '');
 if (fs.existsSync(POSTS_DIR)) {
@@ -129,6 +161,10 @@ if (fs.existsSync(POSTS_DIR)) {
       if (/plaza|parque|recinto/i.test(p.texto)) { score += 1; motivos.push('lugar verbena'); }
       if (RE_ANTI.test(p.texto)) { score -= 4; motivos.push('penalización no-verbena'); }
       const dias = antiguedadDias(p.fecha, d.revisadoEl);
+      // Fecha del evento: si el texto la delata y ya pasó, fuera (post de hace
+      // 4 días diciendo "esta noche" = evento de hace 4 días).
+      const fEv = fechaEvento(d.revisadoEl, dias, p.texto);
+      if (fEv && fEv < hoy0()) { eventosPasados++; continue; }
       // Señales de ciclo de vida: solo posts frescos (<=10 días) con orquesta.
       if (dias <= 10) {
         const hoNombre = (ho || '').split(' (')[0];
@@ -142,6 +178,7 @@ if (fs.existsSync(POSTS_DIR)) {
         candidatas.push({
           id: idPost(d.cuenta, p),
           cuenta: d.cuenta, fecha: p.fecha || '', dias, url: p.url || '',
+          eventoDay: fEv ? dmyDe(fEv) : '',
           texto: p.texto.slice(0, 600), fotos: (p.imagenes || []).slice(0, 4), pdfs: p.pdfs || [],
           score, motivos, revisadoEl: d.revisadoEl
         });
@@ -197,11 +234,11 @@ try {
 // ---------- 3. Guardado: informe + Firebase ----------
 const hoy = new Date().toISOString().slice(0, 10);
 const informe = path.join(ROOT, '.cache', `fb-revision-${hoy}.md`);
-let md = `# Revisión Facebook ${hoy}\n\nCuentas: ${cuentas} · Posts: ${totalPosts} (reels omitidos: ${reelsOmitidos}) · Candidatas a verbena: ${candidatas.length}\n\n`;
+let md = `# Revisión Facebook ${hoy}\n\nCuentas: ${cuentas} · Posts: ${totalPosts} (reels omitidos: ${reelsOmitidos}, eventos ya pasados: ${eventosPasados}) · Candidatas a verbena: ${candidatas.length}\n\n`;
 if (candidatas.length) {
   md += `## Candidatas (score ≥ 4)\n\n`;
   for (const c of candidatas) {
-    md += `### ${c.cuenta} · ${c.fecha || 's/f'} · score ${c.score}\n${c.motivos.join(' · ')}\n\n> ${c.texto.slice(0, 400).replace(/\n/g, ' ')}\n\n${c.url}\n`;
+    md += `### ${c.cuenta} · ${c.fecha || 's/f'}${c.eventoDay ? ` · evento ${c.eventoDay}` : ''} · score ${c.score}\n${c.motivos.join(' · ')}\n\n> ${c.texto.slice(0, 400).replace(/\n/g, ' ')}\n\n${c.url}\n`;
     if (c.fotos.length) md += `\nFotos (${c.fotos.length}):\n` + c.fotos.map((f) => `- ${f}`).join('\n') + '\n';
     if (c.pdfs.length) md += `\nPDFs:\n` + c.pdfs.map((f) => `- ${f}`).join('\n') + '\n';
     md += '\n';

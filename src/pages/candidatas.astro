@@ -78,6 +78,7 @@ const fbOn = !!(fbConfig.apiKey && fbConfig.databaseURL);
         <div class="meta">
           <strong>${esc(c.cuenta)}</strong>
           <span>${esc(c.fecha || 's/f')}</span>
+          ${c.eventoDay ? `<span>📅 evento ${esc(c.eventoDay)}</span>` : ''}
           <span class="badge score">score ${c.score ?? ''}</span>
         </div>
         <div class="motivos">${esc((c.motivos || []).join(' · '))}</div>

@@ -523,7 +523,7 @@ const fbOn = !!(fbConfig.apiKey && fbConfig.databaseURL);
         ? `<div class="bd-dia">📘 Hallazgos de Facebook (${fbLista.length})</div>` +
           fbLista.map((c) =>
             `<div class="bd-item bd-fb-item"><strong>${esc(c.cuenta || '')}</strong>` +
-            ` <span class="lug">${esc(c.fecha || 's/f')} · score ${c.score ?? ''}</span>` +
+            ` <span class="lug">${esc(c.fecha || 's/f')}${c.eventoDay ? ` · 📅 ${esc(c.eventoDay)}` : ''} · score ${c.score ?? ''}</span>` +
             `<span class="bd-fuente fb">Facebook</span>` +
             `<p class="txt">${esc((c.texto || '').slice(0, 300))}</p>` +
             `${(c.pdfs || []).map((p) => `<a href="${esc(p)}" target="_blank" rel="noopener">📄 PDF</a>`).join(' ')}` +
