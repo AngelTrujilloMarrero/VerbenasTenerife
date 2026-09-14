@@ -166,8 +166,9 @@ const fbOn = !!(fbConfig.apiKey && fbConfig.databaseURL);
     <a href="/candidatas" style="color:#6b7280">🔎 Candidatas de Facebook</a>
   </div>
 
-  <div style="text-align:center;margin:4px 0 0">
+  <div style="text-align:center;margin:4px 0 0;display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
     <button id="btn-agenda" class="btn-agenda">📥 Exportar agenda (semana)</button>
+    <button id="btn-recargar" class="btn-agenda" title="Recarga todo en vivo desde los ayuntamientos (tarda ~1 min) y actualiza la base de datos">🔄 Recargar todo</button>
   </div>
 
   <div id="modal-agenda" class="modal" style="display:none">
@@ -431,6 +432,15 @@ const fbOn = !!(fbConfig.apiKey && fbConfig.databaseURL);
     }
 
     async function main() {
+      // ?vivo=1 (botón Recargar todo): salta la BD y raspa en vivo; al pasar
+      // por la API se re-vuelca a Firebase y se refresca lo obsoleto.
+      const params0 = new URLSearchParams(location.search);
+      if (params0.get('vivo') === '1') {
+        // Limpia el flag para que el siguiente F5 vuelva a la vía rápida (BD).
+        history.replaceState(null, '', params0.get('municipio') ? `/?municipio=${params0.get('municipio')}` : '/');
+        await cargaEnVivo();
+        return;
+      }
       // Vía base de datos (una lectura); si falla o está vacía, en vivo.
       if (fbOn) {
         try { await cargaDesdeBD(); return; }
@@ -603,6 +613,12 @@ const fbOn = !!(fbConfig.apiKey && fbConfig.databaseURL);
       } catch (e) { return true; }
     };
     let pngAgenda = null;
+    $('btn-recargar').addEventListener('click', () => {
+      if (!confirm('¿Recargar todo en vivo desde los ayuntamientos? Tarda ~1 min y actualiza la base de datos.')) return;
+      const q = new URLSearchParams(location.search);
+      q.set('vivo', '1');
+      location.search = q.toString();
+    });
     $('btn-agenda').addEventListener('click', async () => {
       const evs = semanaAgenda();
       if (!evs.length) { alert('No hay verbenas esta semana para exportar.'); return; }
