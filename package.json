@@ -7,7 +7,11 @@
     "dev": "astro dev",
     "build": "astro build",
     "preview": "astro preview",
-    "ocr:programa": "node scripts/ocr-programas.mjs"
+    "ocr:programa": "node scripts/ocr-programas.mjs",
+    "fb:login": "node scripts/monitor-facebook-browser.mjs --login",
+    "fb:probar": "node scripts/monitor-facebook-browser.mjs --cuenta=aytofuencaliente",
+    "fb:seguidos": "node scripts/extraer-seguidos.mjs",
+    "fb:importar": "node scripts/importar-seguidos.mjs"
   },
   "dependencies": {
     "astro": "^7.3.2",
@@ -22,6 +26,7 @@
   "devDependencies": {
     "@astrojs/node": "^11.1.5",
     "@astrojs/vercel": "^11.0.10",
+    "playwright-core": "^1.63.0",
     "typescript": "^5.6.0"
   }
 }

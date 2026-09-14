@@ -1,0 +1,227 @@
+---
+export const prerender = false;
+import { MUNICIPIOS_31 } from '../lib/municipios.js';
+const municipios = [...MUNICIPIOS_31, 'Fuera de Tenerife'];
+---
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Cuentas Facebook — Verbenas Tenerife</title>
+  <style is:global>
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: system-ui, -apple-system, sans-serif; background: #111827; color: #fff; }
+    a { color: #93c5fd; }
+    .cabecera { background: #2563eb; padding: 12px 8px; text-align: center; }
+    @media (min-width: 768px) { .cabecera { background: linear-gradient(to right, #2563eb, #9333ea); } }
+    .cabecera h1 { margin: 0; font-size: 1.4rem; font-weight: 800; }
+    .cabecera p { margin: 4px 0 0; color: #dbeafe; font-size: 13px; }
+    .wrap { max-width: 900px; margin: 0 auto; padding: 16px; }
+    .card { background: #1f2937; border: 1px solid #374151; border-radius: 12px; padding: 16px; margin-bottom: 16px; }
+    .card h2 { margin: 0 0 12px; font-size: 16px; color: #facc15; }
+    .grid { display: grid; gap: 10px; }
+    @media (min-width: 700px) { .grid2 { grid-template-columns: 1fr 1fr; } }
+    label { display: block; font-size: 12px; color: #9ca3af; margin-bottom: 4px; text-transform: uppercase; letter-spacing: .04em; }
+    input, select { width: 100%; background: #111827; color: #fff; border: 1px solid #374151; border-radius: 8px; padding: 10px 12px; font-size: 15px; }
+    input:focus, select:focus { outline: none; border-color: #3b82f6; }
+    .fila-check { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+    .fila-check input { width: auto; }
+    .btn { display: inline-flex; align-items: center; gap: 8px; padding: 10px 18px; border-radius: 8px; font-size: 14px; font-weight: 700; cursor: pointer; border: 1px solid; text-decoration: none; }
+    .btn-add { background: linear-gradient(to right, #3b82f6, #a855f7); color: #fff; border: none; }
+    .btn-edit { background: rgba(30,58,138,.5); color: #bfdbfe; border-color: rgba(59,130,246,.3); padding: 6px 12px; font-size: 13px; }
+    .btn-del { background: rgba(127,29,29,.5); color: #fca5a5; border-color: rgba(239,68,68,.3); padding: 6px 12px; font-size: 13px; }
+    .btn-cancel { background: transparent; color: #9ca3af; border-color: #374151; }
+    .tabla-ext { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    th, td { padding: 8px 10px; border-bottom: 1px solid #374151; text-align: left; vertical-align: top; }
+    th { color: #9ca3af; font-size: 12px; text-transform: uppercase; }
+    td.num { text-align: right; white-space: nowrap; }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; background: #374151; color: #d1d5db; }
+    .badge.ok { background: rgba(6,78,59,.5); color: #6ee7b7; }
+    .badge.off { background: rgba(127,29,29,.5); color: #fca5a5; }
+    .badge.tipo { background: rgba(30,58,138,.5); color: #bfdbfe; }
+    .msg { padding: 10px 14px; border-radius: 8px; font-size: 14px; margin-bottom: 12px; display: none; }
+    .msg.ok { display: block; background: rgba(6,78,59,.5); color: #6ee7b7; }
+    .msg.err { display: block; background: rgba(127,29,29,.5); color: #fca5a5; }
+    .top-nav { text-align: center; padding: 10px; font-size: 14px; }
+    .muted { color: #9ca3af; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <header class="cabecera">
+    <h1>📘 Cuentas de Facebook a vigilar</h1>
+    <p>Solo páginas públicas, sin login · se revisan 1 vez cada 2-3 días (mar→jue noche)</p>
+  </header>
+  <nav class="top-nav"><a href="/">← Volver a verbenas</a> · <span class="muted" id="info-fuente"></span></nav>
+
+  <div class="wrap">
+    <div class="msg" id="msg"></div>
+
+    <section class="card">
+      <h2 id="form-titulo">➕ Añadir cuenta</h2>
+      <form id="form" class="grid">
+        <input type="hidden" id="f-id" />
+        <div>
+          <label for="f-nombre">Nombre *</label>
+          <input id="f-nombre" placeholder="Ayto Los Silos" maxlength="120" required />
+        </div>
+        <div>
+          <label for="f-url">URL oficial de Facebook *</label>
+          <input id="f-url" inputmode="url" placeholder="https://www.facebook.com/aytolossilos" required />
+        </div>
+        <div class="grid grid2">
+          <div>
+            <label for="f-municipio">Municipio</label>
+            <select id="f-municipio">
+              <option value="">—</option>
+              {municipios.map((m) => <option value={m}>{m}</option>)}
+            </select>
+          </div>
+          <div>
+            <label for="f-tipo">Tipo</label>
+            <select id="f-tipo">
+              <option value="ayuntamiento">Ayuntamiento</option>
+              <option value="comision">Comisión de fiestas</option>
+              <option value="orquesta">Orquesta / grupo</option>
+              <option value="otro">Otro</option>
+            </select>
+          </div>
+        </div>
+        <div class="fila-check">
+          <input type="checkbox" id="f-activa" checked />
+          <label for="f-activa" style="margin:0;text-transform:none;font-size:14px;color:#fff">Activa (entra en el rastreo)</label>
+        </div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap">
+          <button type="submit" class="btn btn-add" id="btn-guardar">💾 Guardar</button>
+          <button type="button" class="btn btn-cancel" id="btn-cancelar" hidden>Cancelar edición</button>
+        </div>
+      </form>
+    </section>
+
+    <section class="card">
+      <h2>📋 Guardadas (<span id="total">0</span>)</h2>
+      <div class="tabla-ext"><table>
+        <thead><tr><th>Nombre</th><th>Municipio · Tipo</th><th>Estado</th><th>Acciones</th></tr></thead>
+        <tbody id="tbody"><tr><td colspan="4" class="muted">Cargando…</td></tr></tbody>
+      </table></div>
+      <p class="muted">Consejo: pega la URL tal cual la ves en Facebook (vale página, /photo/?fbid=…, /posts/…). Si una página ya está, te avisa con su nombre.</p>
+    </section>
+  </div>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const msg = $('msg'), tbody = $('tbody');
+    let cuentas = [];
+    let editando = null;
+
+    const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) =>
+      ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+    function avisa(texto, ok = true) {
+      msg.className = 'msg ' + (ok ? 'ok' : 'err');
+      msg.textContent = texto;
+      clearTimeout(avisa.t);
+      avisa.t = setTimeout(() => { msg.className = 'msg'; }, 5000);
+    }
+
+    async function cargar() {
+      tbody.innerHTML = '<tr><td colspan="4" class="muted">Cargando…</td></tr>';
+      try {
+        const r = await fetch('/api/fb-cuentas');
+        const d = await r.json();
+        if (!d.ok) throw new Error(d.error || 'fallo');
+        cuentas = d.cuentas || [];
+        $('total').textContent = d.total;
+        $('info-fuente').textContent = d.fuente === 'db'
+          ? `guardadas en Firebase (${d.total})`
+          : `guardadas en local Raspberry (${d.total}) — se subirán a Firebase al configurar .env`;
+        tbody.innerHTML = cuentas.length ? cuentas.map((c) => `
+          <tr>
+            <td><strong>${esc(c.nombre)}</strong><br/>
+              <a href="${esc(c.url)}" target="_blank" rel="noopener" class="muted">${esc(c.handle || c.url)}</a></td>
+            <td>${esc(c.municipio || '—')}<br/><span class="badge tipo">${esc(c.tipo)}</span></td>
+            <td>${c.activa ? '<span class="badge ok">● activa</span>' : '<span class="badge off">○ pausada</span>'}</td>
+            <td class="num">
+              <button class="btn btn-edit" data-edit="${esc(c.id)}">✏️ Editar</button>
+              <button class="btn btn-del" data-del="${esc(c.id)}">🗑️ Borrar</button>
+            </td>
+          </tr>`).join('')
+          : '<tr><td colspan="4" class="muted">Aún no hay cuentas. Añade la primera arriba 👆</td></tr>';
+      } catch (e) {
+        tbody.innerHTML = `<tr><td colspan="4" class="muted">Error: ${esc(e.message)}</td></tr>`;
+      }
+    }
+
+    $('form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const body = {
+        id: editando,
+        nombre: $('f-nombre').value.trim(),
+        url: $('f-url').value.trim(),
+        municipio: $('f-municipio').value,
+        tipo: $('f-tipo').value,
+        activa: $('f-activa').checked
+      };
+      $('btn-guardar').textContent = '⏳ Guardando…';
+      try {
+        const r = await fetch('/api/fb-cuentas', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
+        const d = await r.json();
+        if (!d.ok) throw new Error(d.error || 'fallo');
+        avisa(`Guardada "${d.cuenta.nombre}" (${d.fuente === 'db' ? 'Firebase' : 'local'}) ✓`);
+        cancelar();
+        await cargar();
+      } catch (err) {
+        avisa('❌ ' + err.message, false);
+      }
+      $('btn-guardar').textContent = '💾 Guardar';
+    });
+
+    function cancelar() {
+      editando = null;
+      $('form').reset();
+      $('f-activa').checked = true;
+      $('form-titulo').textContent = '➕ Añadir cuenta';
+      $('btn-cancelar').hidden = true;
+    }
+    $('btn-cancelar').addEventListener('click', cancelar);
+
+    tbody.addEventListener('click', async (e) => {
+      const bEdit = e.target.closest('[data-edit]');
+      const bDel = e.target.closest('[data-del]');
+      if (bEdit) {
+        const c = cuentas.find((x) => x.id === bEdit.dataset.edit);
+        if (!c) return;
+        editando = c.id;
+        $('f-id').value = c.id;
+        $('f-nombre').value = c.nombre || '';
+        $('f-url').value = c.url || '';
+        $('f-municipio').value = c.municipio || '';
+        $('f-tipo').value = c.tipo || 'otro';
+        $('f-activa').checked = c.activa !== false;
+        $('form-titulo').textContent = `✏️ Editando "${c.nombre}"`;
+        $('btn-cancelar').hidden = false;
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+      if (bDel) {
+        const c = cuentas.find((x) => x.id === bDel.dataset.del);
+        if (!c) return;
+        if (!confirm(`¿Borrar "${c.nombre}"? Dejará de rastrearse.`)) return;
+        try {
+          const r = await fetch('/api/fb-cuentas?id=' + encodeURIComponent(c.id), { method: 'DELETE' });
+          const d = await r.json();
+          if (!d.ok) throw new Error(d.error || 'fallo');
+          avisa(`Borrada "${c.nombre}" ✓`);
+          await cargar();
+        } catch (err) {
+          avisa('❌ ' + err.message, false);
+        }
+      }
+    });
+
+    cargar();
+  </script>
+</body>
+</html>

@@ -105,6 +105,51 @@ export async function volcarVerbenas(
   return { leidas: verbenas.length, escritas };
 }
 
+/** ¿Hay base de datos disponible? (para que la API use fallback local si no). */
+export function hayDb(): boolean {
+  return db() !== null;
+}
+
+/** Lee todas las cuentas FB monitorizadas. null = sin DB (usar fallback local). */
+export async function leerCuentasFB(): Promise<import('./fb-cuentas.js').CuentaFB[] | null> {
+  const base = db();
+  if (!base) return null;
+  try {
+    const snap = await base.ref('fb_cuentas').get();
+    if (!snap.exists()) return [];
+    const val = snap.val() as Record<string, import('./fb-cuentas.js').CuentaFB>;
+    return Object.values(val).sort((a, b) => (a.nombre || '').localeCompare(b.nombre || ''));
+  } catch (e) {
+    console.error('db: leer fb_cuentas fallo', (e as Error)?.message || e);
+    return null;
+  }
+}
+
+/** Guarda (upsert) una cuenta FB. null = sin DB. */
+export async function guardarCuentaFB(c: import('./fb-cuentas.js').CuentaFB): Promise<boolean> {
+  const base = db();
+  if (!base) return false;
+  try {
+    await base.ref(`fb_cuentas/${c.id}`).set(c);
+    return true;
+  } catch (e) {
+    console.error('db: guardar fb_cuentas fallo', (e as Error)?.message || e);
+    return false;
+  }
+}
+
+/** Borra una cuenta FB por id. null = sin DB. */
+export async function borrarCuentaFB(id: string): Promise<boolean> {
+  const base = db();
+  if (!base) return false;
+  try {
+    await base.ref(`fb_cuentas/${id}`).remove();
+    return true;
+  } catch (e) {
+    console.error('db: borrar fb_cuentas fallo', (e as Error)?.message || e);
+    return false;
+  }
+}
 /** Borra eventos con day anterior a hoy-N días. Devuelve cuántos. */
 export async function purgarAntiguas(dias = 2): Promise<number> {
   const base = db();
