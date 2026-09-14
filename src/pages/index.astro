@@ -131,6 +131,12 @@ const fbOn = !!(fbConfig.apiKey && fbConfig.databaseURL);
     .bd th { color: #9ca3af; font-weight: 600; }
     .bd td.num { text-align: right; font-variant-numeric: tabular-nums; }
     .bd .ok { color: #4ade80; } .bd .mal { color: #f87171; }
+    .bd details { margin-top: 6px; font-size: 12px; }
+    .bd summary { cursor: pointer; color: #93c5fd; }
+    .bd-evs { margin: 6px 0 2px; padding-left: 18px; color: #d1d5db; }
+    .bd-evs li { margin-bottom: 4px; }
+    .bd-evs em { color: #9ca3af; font-style: normal; }
+    .bd .muted { color: #6b7280; }
   </style>
 </head>
 <body>
@@ -481,11 +487,21 @@ const fbOn = !!(fbConfig.apiKey && fbConfig.databaseURL);
       const tb = document.querySelector('#bd-tabla tbody');
       tb.innerHTML = fuentes.map((f) => {
         const m = (meta || {})[f.id];
-        const n = todas.filter((v) => v.fuente === f.id).length;
+        const evs = todas.filter((v) => v.fuente === f.id)
+          .sort((a, b) => (aFecha(a.day) - aFecha(b.day)) || String(a.hora).localeCompare(String(b.hora)));
+        const nFut = evs.filter((v) => v.futura).length;
         const est = !m ? '<span>—</span>' : m.ok === false
           ? '<span class="mal">⚠ fallo último raspado</span>' : '<span class="ok">✓ ok</span>';
-        return `<tr><td>${esc(f.nombre)}</td><td class="num">${n}</td>` +
-          `<td class="num">${todas.filter((v) => v.fuente === f.id && v.futura).length}</td>` +
+        const detalle = evs.length
+          ? `<details><summary>Ver ${evs.length} evento${evs.length === 1 ? '' : 's'}</summary>` +
+            `<ul class="bd-evs">` + evs.map((v) =>
+              `<li>${v.futura ? '' : '<s>'}<strong>${esc(v.day || 's/f')} ${esc(v.hora || '')}</strong> — ${esc(v.titulo)}` +
+              `${v.lugar ? ` <em>(${esc(v.lugar)})</em>` : ''}` +
+              `${(v.orquestas || []).length ? ` 🎵 ${esc(v.orquestas.join(' + '))}` : ''}${v.futura ? '' : '</s>'}</li>`
+            ).join('') + `</ul></details>`
+          : '<span class="muted">vacío</span>';
+        return `<tr><td>${esc(f.nombre)}<br/>${detalle}</td><td class="num">${evs.length}</td>` +
+          `<td class="num">${nFut}</td>` +
           `<td>${m?.at ? esc(haceX(m.at)) : '—'}</td><td>${est}</td></tr>`;
       }).join('');
       $('bd-total').textContent = `${guardados} eventos almacenados en total.`;
