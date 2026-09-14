@@ -44,6 +44,13 @@ if (!args['sin-extraer']) {
   console.log('1/3 Extracción omitida (--sin-extraer).');
 }
 
+// ---------- 2a-bis. OCR de carteles (fotos de posts pre-filtrados) ----------
+if (!args['sin-extraer'] || args['con-ocr']) {
+  console.log('2a-bis/3 OCR de carteles…');
+  const r = spawnSync('node', ['scripts/ocr-fb.mjs'], { cwd: ROOT, stdio: 'inherit' });
+  if (r.status !== 0) console.warn('OCR-FB acabó con código', r.status, '(se clasifica sin carteles)');
+}
+
 // ---------- 2. Clasificación ----------
 console.log('2/3 Clasificando…');
 const ORQ = JSON.parse(fs.readFileSync(path.join(ROOT, 'src', 'lib', 'data', 'orquestas.json'), 'utf8')).orquestas || [];
@@ -166,36 +173,51 @@ if (fs.existsSync(POSTS_DIR)) {
       totalPosts++;
       // Reels no se verifican: solo imagen, texto y PDF.
       if (esReel(p)) { reelsOmitidos++; continue; }
+      // Texto + transcripción del cartel (si el paso 2a-bis la generó).
+      // Puerta de calidad: los carteles decorativos salen del tesseract como
+      // basura; el OCR solo entra si aporta alguna señal (keyword, hora,
+      // orquesta o mes). Si no, se guarda pero se ignora.
+      let ocrValido = '';
+      if (p.ocrTexto) {
+        const t = p.ocrTexto;
+        const vale = RE_VERBENA.test(t) || RE_FIESTA.test(t) || RE_HORA.test(t) ||
+          /enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|setiembre|octubre|noviembre|diciembre|lunes|martes|miércoles|miercoles|jueves|viernes|sábado|sabado|domingo|20\d{2}/i.test(t) ||
+          !!orquestaEn(t);
+        if (vale) ocrValido = t;
+      }
+      const textoFull = p.texto + (ocrValido ? '\n[CARTEL] ' + ocrValido : '');
+      const conCartel = !!ocrValido;
       let score = 0;
       const motivos = [];
-      const pm = p.texto.match(RE_VERBENA);
+      const pm = textoFull.match(RE_VERBENA);
       if (pm) { score += 3; motivos.push('keyword: ' + pm[1]); }
-      const fi = p.texto.match(RE_FIESTA);
+      const fi = textoFull.match(RE_FIESTA);
       if (fi) { score += 2; motivos.push('fiesta: ' + fi[1].slice(0, 40)); }
-      const ho = orquestaEn(p.texto);
-      if (ho) { score += 5; motivos.push('orquesta 2024-25: ' + ho); }
-      if (RE_HORA.test(p.texto)) { score += 1; motivos.push('hora 19-23h'); }
-      if (/plaza|parque|recinto/i.test(p.texto)) { score += 1; motivos.push('lugar verbena'); }
-      if (RE_ANTI.test(p.texto)) { score -= 4; motivos.push('penalización no-verbena'); }
+      const ho = orquestaEn(textoFull);
+      if (ho) { score += 5; motivos.push('orquesta 2024-25: ' + ho + (conCartel && !(p.texto || '').includes(ho.split(' (')[0]) ? ' (cartel)' : '')); }
+      if (RE_HORA.test(textoFull)) { score += 1; motivos.push('hora 19-23h'); }
+      if (/plaza|parque|recinto/i.test(textoFull)) { score += 1; motivos.push('lugar verbena'); }
+      if (RE_ANTI.test(textoFull)) { score -= 4; motivos.push('penalización no-verbena'); }
       const dias = antiguedadDias(p.fecha, d.revisadoEl);
       // Fecha del evento: si el texto la delata y ya pasó, fuera (post de hace
       // 4 días diciendo "esta noche" = evento de hace 4 días).
-      const fEv = fechaEvento(d.revisadoEl, dias, p.texto);
+      const fEv = fechaEvento(d.revisadoEl, dias, textoFull);
       if (fEv && fEv < hoy0()) { eventosPasados++; continue; }
       // Señales de ciclo de vida: solo posts frescos (<=10 días) con orquesta.
       if (dias <= 10) {
         const hoNombre = (ho || '').split(' (')[0];
-        if (hoNombre && RE_CANCEL.test(p.texto)) {
-          senales.push({ tipo: 'cancelacion', orquesta: hoNombre, cuenta: d.cuenta, url: p.url || '', texto: p.texto.slice(0, 300), fecha: p.fecha || '' });
-        } else if (hoNombre && RE_RETOMAR.test(p.texto)) {
-          senales.push({ tipo: 'retomar', orquesta: hoNombre, cuenta: d.cuenta, url: p.url || '', texto: p.texto.slice(0, 300), fecha: p.fecha || '' });
+        if (hoNombre && RE_CANCEL.test(textoFull)) {
+          senales.push({ tipo: 'cancelacion', orquesta: hoNombre, cuenta: d.cuenta, url: p.url || '', texto: textoFull.slice(0, 300), fecha: p.fecha || '' });
+        } else if (hoNombre && RE_RETOMAR.test(textoFull)) {
+          senales.push({ tipo: 'retomar', orquesta: hoNombre, cuenta: d.cuenta, url: p.url || '', texto: textoFull.slice(0, 300), fecha: p.fecha || '' });
         }
       }
       // Pre-filtro barato: a la IA solo lo que huele a verbena (>=2).
       if (score >= 2) {
-        pre.push({ indice: pre.length, id: idPost(d.cuenta, p), hash: hashTxt(p.texto),
+        pre.push({ indice: pre.length, id: idPost(d.cuenta, p),
+          hash: hashTxt(p.texto + (conCartel ? '#ocr' : '')),
           cuenta: d.cuenta, url: p.url || '', fecha: p.fecha || '',
-          dias, fEv: fEv ? dmyDe(fEv) : '', texto: p.texto.slice(0, 800),
+          dias, fEv: fEv ? dmyDe(fEv) : '', texto: textoFull.slice(0, 800),
           fotos: (p.imagenes || []).slice(0, 4), pdfs: p.pdfs || [],
           ho, score, motivos, revisadoEl: d.revisadoEl });
       }
