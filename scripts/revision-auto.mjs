@@ -48,6 +48,8 @@ console.log('2/3 Clasificando…');
 const ORQ = JSON.parse(fs.readFileSync(path.join(ROOT, 'src', 'lib', 'data', 'orquestas.json'), 'utf8')).orquestas || [];
 const norm = (s) => ' ' + String(s || '').toLowerCase().replace(/[.,;:()"“”‘’¡!¿?]/g, ' ').replace(/\s+/g, ' ') + ' ';
 const RE_VERBENA = /(gran baile|baile|verbena|verbenazo|tardeo|noche latina|noche en blanco|latinazo|baile de magos|orquesta)/i;
+// Keywords de fiesta (contenedor de verbenas): programa, cartel, próxima...
+const RE_FIESTA = /(fiestas?( patronales)?|festejos|proxim[ao]s?\s+(verbena|baile|eventos?|actos)|programa de (fiestas|actos)|cartel de fiestas|fiestas en honor)/i;
 const RE_ANTI = /infantil|familiar|beb[ée]cuento|hinchables?|tercera edad|tercera juventud|\bmayores\b|misa|procesi[óo]n|rosario/i;
 const RE_HORA = /(19|2[0-3]):\d{2}/;
 // Fase 3: señales de ciclo de vida en posts de orquestas/cuentas.
@@ -103,7 +105,9 @@ function idPost(cuenta, p) {
 
 const candidatas = [];
 const senales = []; // {tipo: 'cancelacion'|'retomar', orquesta, cuenta, url, texto, fecha}
-let totalPosts = 0, cuentas = 0;
+let totalPosts = 0, cuentas = 0, reelsOmitidos = 0;
+// Reel aunque venga sin marcar de extracciones viejas (url /reel/ o duración).
+const esReel = (p) => p.esReel === true || /\/reel\//.test(p.url || '') || /\d+:\d+\s*\/\s*\d+:\d+/.test(p.texto || '');
 if (fs.existsSync(POSTS_DIR)) {
   for (const f of fs.readdirSync(POSTS_DIR).filter((x) => x.endsWith('.json'))) {
     let d;
@@ -111,10 +115,14 @@ if (fs.existsSync(POSTS_DIR)) {
     cuentas++;
     for (const p of d.posts || []) {
       totalPosts++;
+      // Reels no se verifican: solo imagen, texto y PDF.
+      if (esReel(p)) { reelsOmitidos++; continue; }
       let score = 0;
       const motivos = [];
       const pm = p.texto.match(RE_VERBENA);
       if (pm) { score += 3; motivos.push('keyword: ' + pm[1]); }
+      const fi = p.texto.match(RE_FIESTA);
+      if (fi) { score += 2; motivos.push('fiesta: ' + fi[1].slice(0, 40)); }
       const ho = orquestaEn(p.texto);
       if (ho) { score += 5; motivos.push('orquesta 2024-25: ' + ho); }
       if (RE_HORA.test(p.texto)) { score += 1; motivos.push('hora 19-23h'); }
@@ -189,7 +197,7 @@ try {
 // ---------- 3. Guardado: informe + Firebase ----------
 const hoy = new Date().toISOString().slice(0, 10);
 const informe = path.join(ROOT, '.cache', `fb-revision-${hoy}.md`);
-let md = `# Revisión Facebook ${hoy}\n\nCuentas: ${cuentas} · Posts: ${totalPosts} · Candidatas a verbena: ${candidatas.length}\n\n`;
+let md = `# Revisión Facebook ${hoy}\n\nCuentas: ${cuentas} · Posts: ${totalPosts} (reels omitidos: ${reelsOmitidos}) · Candidatas a verbena: ${candidatas.length}\n\n`;
 if (candidatas.length) {
   md += `## Candidatas (score ≥ 4)\n\n`;
   for (const c of candidatas) {
@@ -225,7 +233,7 @@ try {
   }
   await fetch(`${DB}/meta/fb_revision.json`, { method: 'PUT',
     body: JSON.stringify({ at: Date.now(), cuentas, posts: totalPosts, candidatas: candidatas.length, cambiosEstado: cambiosEstado.length }) });
-  console.log(`Firebase: ${candidatas.length} candidatas + meta/fb_revision ✓`);
+  console.log(`Firebase: ${frescas.length} candidatas frescas + meta/fb_revision ✓`);
 } catch (e) {
   console.log('Firebase: no se pudo volcar (' + (e.message || e).split('\n')[0] + '). Informe local OK.');
 }

@@ -115,11 +115,14 @@ async function extraerPosts(page, max) {
           .filter((s) => s.startsWith('http') && !s.includes('emoji'));
         const t = a.querySelector('time');
         const rel = (texto.match(/(\d+\s*min|\d+\s*h\b|ayer|\d+\s*d(?:[ií]as?)?\b|\d+\s*semanas?|\d{1,2}\s*de\s*[a-z]{3,}\.?)/i) || [])[1] || '';
+        // Reels: no se verifican (solo importan imagen, texto y PDF).
+        const esReel = /\/reel\//.test(links[0] || '') || /\d+:\d+\s*\/\s*\d+:\d+/.test(texto);
         return {
           texto,
           url: links[0] || '',
           imagenes: imgs.slice(0, 4),
           pdfs,
+          esReel,
           fecha: t?.getAttribute('datetime') || rel
         };
       }),
