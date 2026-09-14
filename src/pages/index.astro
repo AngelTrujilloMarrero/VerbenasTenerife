@@ -503,6 +503,48 @@ const fbOn = !!(fbConfig.apiKey && fbConfig.databaseURL);
         .filter((c) => ((c.dias ?? 999) <= 7))
         .sort((a, b) => (b.score || 0) - (a.score || 0));
       renderBD(meta, mapa.size, fbLista);
+      // Como antes: tras pintar la BD, revalida cada fuente en vivo una a una
+      // (chips progresivos) y fusiona solo lo nuevo. Así la primera pintura
+      // es instantánea y la frescura llega municipio a municipio.
+      refrescarEnVivo();
+    }
+
+    async function refrescarEnVivo() {
+      const vistos = new Set(todas.map((v) => v.id));
+      let nuevas = 0;
+      texto.textContent = `Base de datos mostrada · actualizando en vivo…`;
+      const pendientes = [...fuentes];
+      const meteoDeFuente = (evs) => {
+        const porMuni = {};
+        evs.filter((v) => v.futura).forEach((v) => {
+          (porMuni[v.municipio] = porMuni[v.municipio] || []).push(v.day);
+        });
+        Object.entries(porMuni).forEach(([muni, dias]) => cargaMeteo(muni, dias));
+      };
+      const workers = Array.from({ length: Math.min(4, pendientes.length) }, async () => {
+        while (pendientes.length) {
+          const f = pendientes.shift();
+          chips[f.id].textContent = `↻ ${f.nombre}…`;
+          try {
+            const r = await fetch(`/api/verbenas.json?municipio=${f.id}&filtro=todas`);
+            if (!r.ok) throw new Error(`HTTP ${r.status}`);
+            const d = await r.json();
+            const deFuente = (d.verbenas || []).filter((v) => !vistos.has(v.id));
+            deFuente.forEach((v) => vistos.add(v.id));
+            nuevas += deFuente.length;
+            todas.push(...deFuente);
+            meteoDeFuente(deFuente);
+          } catch (err) { /* se queda lo de la BD para esta fuente */ }
+          const nFut = todas.filter((v) => v.fuente === f.id && v.futura).length;
+          chips[f.id].className = 'chip ok';
+          chips[f.id].textContent = `✓ ${f.nombre} (${nFut})`;
+          render();
+        }
+      });
+      await Promise.all(workers);
+      texto.textContent = nuevas
+        ? `Actualizado en vivo: ${nuevas} novedades sobre la base de datos · ${todas.filter((v) => v.futura).length} próximas.`
+        : `Al día: la base de datos ya lo tenía todo · ${todas.filter((v) => v.futura).length} próximas.`;
     }
 
     // Listado cronológico de TODO lo guardado (ayuntamientos + Facebook),
