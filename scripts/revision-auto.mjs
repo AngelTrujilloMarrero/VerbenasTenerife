@@ -307,6 +307,78 @@ try {
   console.log('Ciclo de vida omitido (' + (e.message || e).split('\n')[0] + ')');
 }
 
+// ---------- 2c. Cruce candidatas IA-verificadas con eventos presentes/futuros ----------
+// Si la candidata casa con un evento en BD se enriquece (confirmado por FB);
+// si no casa con ninguno, queda como novedosa (posible evento nuevo).
+console.log('2c/3 Cruce con eventos en BD…');
+const cruces = []; // {candidata, evento, accion}
+try {
+  // Municipio por cuenta (de /cuentas).
+  const muniPorCuenta = new Map();
+  try {
+    const cuentasDb = JSON.parse(fs.readFileSync(path.join(ROOT, '.cache', 'fb-cuentas.json'), 'utf8'));
+    for (const c of cuentasDb) {
+      if (c.url) muniPorCuenta.set(normD(c.url).replace(/\/$/, ''), c.municipio || '');
+      if (c.handle) muniPorCuenta.set('handle:' + normD(c.handle), c.municipio || '');
+    }
+  } catch { /* sin lista de cuentas: se cruza solo por orquesta+título */ }
+  const muniDeCuenta = (cuenta) => {
+    const u = normD(cuenta).replace(/\/$/, '');
+    if (muniPorCuenta.has(u)) return muniPorCuenta.get(u);
+    const h = u.split('/').filter(Boolean).pop() || '';
+    return muniPorCuenta.get('handle:' + h) || '';
+  };
+  const STOPC = new Set(['de', 'la', 'el', 'las', 'los', 'del', 'en', 'con', 'por', 'una', 'y', 'al', 'gran', 'san', 'santa', 'fiesta', 'fiestas', 'baile', 'verbena']);
+  const toksC = (s) => new Set(normD(s).split(' ').filter((w) => w.length > 3 && !STOPC.has(w)));
+  const events2 = await (await fetch(`${DB}/events.json`)).json() || {};
+  const futuros = Object.entries(events2).map(([id, v]) => ({ id, ...v }))
+    .filter((e) => (e.dayNum || 0) >= hoyN && (e.estado || 'activo') === 'activo');
+
+  for (const c of candidatas) {
+    const muniC = muniDeCuenta(c.cuenta);
+    const tc = toksC(c.texto);
+    const casan = futuros.filter((e) => {
+      if (muniC && normD(e.municipio) !== normD(muniC)) return false;
+      const eo = (e.orquestas || []).map(alnum).filter(Boolean);
+      const co = (c.orquestas || []).map(alnum).filter(Boolean);
+      const hayOrq = eo.some((a) => co.some((b) => a === b || a.includes(b) || b.includes(a)));
+      if (hayOrq) return true;
+      if (!muniC) return false; // sin municipio solo vale orquesta común
+      const te = toksC(e.titulo);
+      let n = 0;
+      for (const w of tc) if (te.has(w)) n++;
+      return n >= 2;
+    });
+    if (casan.length === 1) {
+      const e = casan[0];
+      const marca = `confirmado en Facebook (${c.cuenta.split('/').filter(Boolean).pop()})`;
+      const orqU = [...(e.orquestas || [])];
+      for (const o of c.orquestas || []) {
+        if (!orqU.some((x) => alnum(x) === alnum(o))) orqU.push(o);
+      }
+      const patch = {
+        orquestas: orqU,
+        motivos: [...new Set([...(e.motivos || []), marca])],
+        fuentes: [...new Set([...(e.fuentes || [e.fuente].filter(Boolean)), 'facebook'])],
+        score: Math.max(e.score || 0, c.score || 0),
+        actualizadoAt: Date.now()
+      };
+      await fetch(`${DB}/events/${e.id}.json`, { method: 'PATCH', body: JSON.stringify(patch) });
+      c.eventoId = e.id;
+      cruces.push({ candidata: c.id, evento: e.id, accion: 'enriquecido', titulo: e.titulo, day: e.day });
+    } else if (casan.length === 0) {
+      cruces.push({ candidata: c.id, evento: null, accion: 'novedoso', titulo: c.texto.slice(0, 60) });
+    } else {
+      cruces.push({ candidata: c.id, evento: null, accion: 'ambiguo', titulo: `${casan.length} candidatos` });
+    }
+  }
+  const enr = cruces.filter((x) => x.accion === 'enriquecido').length;
+  const nov = cruces.filter((x) => x.accion === 'novedoso').length;
+  console.log(`Cruce: ${enr} enriquecidos, ${nov} novedosos, ${cruces.length - enr - nov} ambiguos`);
+} catch (e) {
+  console.log('Cruce omitido (' + (e.message || e).split('\n')[0] + ')');
+}
+
 // ---------- 3. Guardado: informe + Firebase ----------
 const hoy = new Date().toISOString().slice(0, 10);
 const informe = path.join(ROOT, '.cache', `fb-revision-${hoy}.md`);
@@ -327,6 +399,14 @@ if (cambiosEstado.length) {
   for (const c of cambiosEstado) {
     md += `- ${c.titulo} (${c.day || 's/f'}): ${c.de} → **${c.a}** · ${c.motivo}\n`;
   }
+  md += '\n';
+}
+if (cruces.length) {
+  const enr = cruces.filter((x) => x.accion === 'enriquecido');
+  const nov = cruces.filter((x) => x.accion === 'novedoso');
+  md += `## Cruce con eventos en BD\n\nEnriquecidos: ${enr.length} · Novedosos: ${nov.length} · Ambiguos: ${cruces.length - enr.length - nov.length}\n\n`;
+  for (const x of enr.slice(0, 30)) md += `- ✅ ${x.titulo} (${x.day}) ← ${x.candidata}\n`;
+  for (const x of nov.slice(0, 30)) md += `- 🆕 ${x.titulo}… ← ${x.candidata}\n`;
   md += '\n';
 }
 fs.writeFileSync(informe, md);
