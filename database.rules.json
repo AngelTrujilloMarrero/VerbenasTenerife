@@ -1,0 +1,12 @@
+{
+  "rules": {
+    ".read": true,
+    ".write": true,
+    "events": {
+      ".indexOn": ["dayNum", "municipio", "fuente"]
+    },
+    "meta": {
+      ".indexOn": ["at"]
+    }
+  }
+}
