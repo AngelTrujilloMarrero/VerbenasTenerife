@@ -210,6 +210,7 @@ let veredictos = new Map();
     const resIA = await verificarConIA(
       pre.map((e) => ({ indice: e.indice, cuenta: e.cuenta, fechaPost: e.fecha || `hace ${e.dias} días`, texto: e.texto })),
       { geminiKey: GEMINI_KEY, geminiModel: GEMINI_MODEL, groqKey: GROQ_KEY, openrouterKey: OPENROUTER_KEY,
+        customBase: envLocal('IA_BASE_URL'), customKey: envLocal('IA_API_KEY'), customModel: envLocal('IA_MODEL'),
         deepseekKey: envLocal('DEEPSEEK_API_KEY'), pago: envLocal('IA_PAGO') === '1',
         maxPosts: Number(envLocal('MAX_IA_POSTS') || 120), hoy: hoyDmy });
     veredictos = resIA.veredictos;

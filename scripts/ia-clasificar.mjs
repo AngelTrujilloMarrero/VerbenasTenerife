@@ -3,7 +3,9 @@
 //   1. Gemini directo (GEMINI_API_KEY, gratis ~1500/día, sin tarjeta)
 //   2. Groq OpenAI-compatible (GROQ_API_KEY, gratis ~1000/día, rápido)
 //   3. OpenRouter :free (OPENROUTER_API_KEY, gratis 50/día)
-//   4. Pollinations (sin clave, anónimo 1 req/15s) — siempre disponible
+//   4. Endpoint OpenAI-compatible propio (IA_BASE_URL): Ollama en local
+//      (gratis para siempre, sin cuotas ni red), NVIDIA NIM, Mistral, etc.
+//   5. Pollinations (sin clave, anónimo 1 req/15s) — siempre disponible
 // La regex hace de pre-filtro barato; la IA decide los casos difíciles.
 // Sin ningún proveedor (imposible: Pollinations no necesita clave) o si todo
 // falla, el llamador usa la lógica regex.
@@ -87,6 +89,9 @@ export async function verificarConIA(posts, cfg = {}) {
   const gasto = { proveedor: null, tokens: 0, costeUSD: 0 };
   if (!posts.length) return { veredictos: out, gasto };
   const hoy = cfg.hoy;
+  if (cfg.customBase) {
+    proveedores.push({ nombre: 'Custom', fn: (l) => loteOpenAI(l, hoy, cfg.customBase, cfg.customKey || '', cfg.customModel || 'qwen3:8b', 'Custom') });
+  }
   // DeepSeek (PAGO) solo si IA_PAGO=1: va el ÚLTIMO, solo gasta si todo lo
   // gratis falló. Cap de seguridad: MAX_IA_POSTS.
   const maxPosts = cfg.maxPosts || 120;
