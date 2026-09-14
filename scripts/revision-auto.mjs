@@ -7,6 +7,7 @@ import { execFileSync, execSync, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { verificarConIA } from './ia-clasificar.mjs';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const args = Object.fromEntries(process.argv.slice(2).map((a) => {
@@ -104,6 +105,7 @@ function idPost(cuenta, p) {
 }
 
 const candidatas = [];
+const pre = []; // pre-filtro regex (>=2) pendiente de verificación IA
 
 // Fecha del EVENTO mencionado en el texto, relativa al día del post
 // (revisadoEl - dias). Devuelve Date o null si no hay pista. Si el evento ya
@@ -140,6 +142,14 @@ const senales = []; // {tipo: 'cancelacion'|'retomar', orquesta, cuenta, url, te
 let totalPosts = 0, cuentas = 0, reelsOmitidos = 0, eventosPasados = 0;
 // Reel aunque venga sin marcar de extracciones viejas (url /reel/ o duración).
 const esReel = (p) => p.esReel === true || /\/reel\//.test(p.url || '') || /\d+:\d+\s*\/\s*\d+:\d+/.test(p.texto || '');
+// Clave Gemini del .env local (aistudio.google.com). Sin ella, todo regex.
+function envLocal(k) {
+  if (process.env[k]) return process.env[k].trim();
+  try {
+    const m = fs.readFileSync(path.join(ROOT, '.env'), 'utf8').match(new RegExp(`^${k}=(.*)$`, 'm'));
+    return (m?.[1] || '').trim();
+  } catch { return ''; }
+}
 if (fs.existsSync(POSTS_DIR)) {
   for (const f of fs.readdirSync(POSTS_DIR).filter((x) => x.endsWith('.json'))) {
     let d;
@@ -174,17 +184,70 @@ if (fs.existsSync(POSTS_DIR)) {
           senales.push({ tipo: 'retomar', orquesta: hoNombre, cuenta: d.cuenta, url: p.url || '', texto: p.texto.slice(0, 300), fecha: p.fecha || '' });
         }
       }
-      if (score >= 4) {
-        candidatas.push({
-          id: idPost(d.cuenta, p),
-          cuenta: d.cuenta, fecha: p.fecha || '', dias, url: p.url || '',
-          eventoDay: fEv ? dmyDe(fEv) : '',
-          texto: p.texto.slice(0, 600), fotos: (p.imagenes || []).slice(0, 4), pdfs: p.pdfs || [],
-          score, motivos, revisadoEl: d.revisadoEl
-        });
+      // Pre-filtro barato: a la IA solo lo que huele a verbena (>=2).
+      if (score >= 2) {
+        pre.push({ indice: pre.length, cuenta: d.cuenta, url: p.url || '', fecha: p.fecha || '',
+          dias, fEv: fEv ? dmyDe(fEv) : '', texto: p.texto.slice(0, 800),
+          fotos: (p.imagenes || []).slice(0, 4), pdfs: p.pdfs || [],
+          ho, score, motivos, revisadoEl: d.revisadoEl });
       }
     }
   }
+}
+
+// ---------- 2a. Verificación IA (opcional; sin clave, manda la regex) ----------
+const GEMINI_KEY = args['sin-ia'] ? '' : envLocal('GEMINI_API_KEY');
+const GEMINI_MODEL = envLocal('GEMINI_MODEL') || 'gemini-2.0-flash';
+let veredictos = new Map();
+{
+  const hoyDmy = (() => { const d = new Date(); return `${String(d.getDate()).padStart(2, '0')}-${String(d.getMonth() + 1).padStart(2, '0')}-${d.getFullYear()}`; })();
+  if (GEMINI_KEY && pre.length) {
+    console.log(`2a/3 Verificando ${pre.length} posts con IA (${GEMINI_MODEL})…`);
+    veredictos = await verificarConIA(
+      pre.map((e) => ({ indice: e.indice, cuenta: e.cuenta, fechaPost: e.fecha || `hace ${e.dias} días`, texto: e.texto })),
+      { apiKey: GEMINI_KEY, model: GEMINI_MODEL, hoy: hoyDmy });
+    console.log(`IA: ${veredictos.size} veredictos de ${pre.length}`);
+  } else {
+    console.log('2a/3 IA omitida (sin GEMINI_API_KEY o --sin-ia): decide la regex.');
+  }
+}
+
+for (const e of pre) {
+  const v = veredictos.get(e.indice);
+  if (v && !GEMINI_KEY) { /* imposible, guardia */ }
+  if (veredictos.size && !v) continue; // la IA lo vio y no lo devolvió = irrelevante
+  if (v && v.relevante === false) continue; // la IA lo descarta aunque la regex lo quisiera
+  const motivos = [...e.motivos];
+  let eventoDay = e.fEv, score = e.score;
+  const orqExtra = [];
+  if (v) {
+    motivos.push('IA: ' + String(v.motivo || 'vigente').slice(0, 80));
+    if (v.fechaEvento && /^\d{2}-\d{2}-\d{4}$/.test(v.fechaEvento)) eventoDay = v.fechaEvento;
+    for (const o of v.orquestas || []) {
+      if (!e.ho?.includes(String(o).split(' (')[0]) && !orqExtra.includes(o)) orqExtra.push(o);
+    }
+    if (v.esCancelacion && (v.orquestas?.[0] || e.ho)) {
+      const on = String(v.orquestas?.[0] || e.ho).split(' (')[0];
+      if (!senales.some((s) => s.tipo === 'cancelacion' && s.orquesta === on)) {
+        senales.push({ tipo: 'cancelacion', orquesta: on, cuenta: e.cuenta, url: e.url, texto: e.texto.slice(0, 300), fecha: e.fecha });
+      }
+    }
+    if (v.esRetomar && (v.orquestas?.[0] || e.ho)) {
+      const on = String(v.orquestas?.[0] || e.ho).split(' (')[0];
+      if (!senales.some((s) => s.tipo === 'retomar' && s.orquesta === on)) {
+        senales.push({ tipo: 'retomar', orquesta: on, cuenta: e.cuenta, url: e.url, texto: e.texto.slice(0, 300), fecha: e.fecha });
+      }
+    }
+  }
+  // Sin veredicto IA rige la regex (>=4); con veredicto favorable basta >=2.
+  if (!v && score < 4) continue;
+  const orquestas = [...(e.ho ? [e.ho.split(' (')[0]] : []), ...orqExtra].filter(Boolean);
+  candidatas.push({
+    id: idPost(e.cuenta, { url: e.url, texto: e.texto }),
+    cuenta: e.cuenta, fecha: e.fecha, dias: e.dias, url: e.url,
+    eventoDay, texto: e.texto.slice(0, 600), fotos: e.fotos, pdfs: e.pdfs,
+    orquestas, score: v ? Math.max(score, 4) : score, motivos, revisadoEl: e.revisadoEl
+  });
 }
 candidatas.sort((a, b) => b.score - a.score || a.dias - b.dias);
 
