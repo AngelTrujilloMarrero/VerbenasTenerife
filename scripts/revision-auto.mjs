@@ -217,7 +217,9 @@ console.log(`3/3 Informe: .cache/fb-revision-${hoy}.md (${candidatas.length} can
 // Volcado a Firebase por REST (las reglas están abiertas; sin service account
 // no hay Admin SDK, pero el PUT anónimo vale igual para estos nodos).
 try {
-  for (const c of candidatas) {
+  // A la nube solo lo fresco (post de <=7 días): los hallazgos son presente.
+  const frescas = candidatas.filter((c) => (c.dias ?? 999) <= 7);
+  for (const c of frescas) {
     const r = await fetch(`${DB}/fb_candidatos/${c.id}.json`, { method: 'PUT', body: JSON.stringify(c) });
     if (!r.ok) throw new Error(`PUT fb_candidatos: HTTP ${r.status}`);
   }

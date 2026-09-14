@@ -65,7 +65,7 @@ de los ayuntamientos (caché 1h por adaptador) y filtra verbenas con patrones.
 - Firebase Realtime Database (`verbenastenerife`, europe-west1): `src/lib/db.ts`
   vuelca en 2º plano desde `/api/verbenas.json` con upsert por ID estable
   (`set`, nunca `push`; leer-antes-de-escribir con comparación NFD como el
-  admin) y purga lo de hace >2 días; `/meta` por fuente. El navegador lee
+   admin) y purga todo lo anterior a hoy (la BD es solo presente+futuro); `/meta` por fuente. El navegador lee
   directo con el SDK web (una lectura + Map por ID) y cae a la API si la BD
   está vacía (la API entonces la rellena). Al pie, sección "En la base de
   datos" con lo guardado por fuente. Reglas: lectura pública, escritura

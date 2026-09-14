@@ -12,8 +12,8 @@ export const GET: APIRoute = async ({ url }) => {
   try {
     const todas = await obtenerVerbenas(municipio);
     const conFlag = todas.map((v) => ({ ...v, futura: esFutura(v.day) }));
-    // Volcado a RTDB en 2º plano (upsert por ID: solo escribe lo nuevo o
-    // cambiado; purga lo de hace >2 días). No bloquea ni falla sin creds.
+        // Volcado a RTDB en 2º plano (upsert por ID: solo escribe lo nuevo o
+    // cambiado; purga todo lo anterior a hoy: la BD es solo presente+futuro).
     // La fuente se resuelve por hostname de agenda (Drive ambiguo -> por
     // municipio; resto -> 'agregador').
     void (async () => {
@@ -39,7 +39,7 @@ export const GET: APIRoute = async ({ url }) => {
         for (const [fid, lista] of porFuente) {
           await volcarVerbenas(lista, fid);
         }
-        await purgarAntiguas(2);
+        await purgarAntiguas(0);
       } catch (e) {
         console.error('db: volcado fondo fallo', (e as Error)?.message || e);
       }

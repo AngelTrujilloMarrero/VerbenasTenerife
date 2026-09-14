@@ -202,7 +202,7 @@ const fbOn = !!(fbConfig.apiKey && fbConfig.databaseURL);
     <p class="muted" id="bd-resumen" style="text-align:center"></p>
     <div id="bd-lista"></div>
     <div id="bd-fb"></div>
-    <small>Los eventos con más de 2 días pasados se borran automáticamente.</small>
+    <small>La base de datos solo guarda hoy y futuro; lo pasado se borra automáticamente.</small>
   </section>
 
   <noscript><p style="text-align:center">Necesitas JavaScript para cargar las agendas en vivo.</p></noscript>
@@ -490,6 +490,7 @@ const fbOn = !!(fbConfig.apiKey && fbConfig.databaseURL);
       bf.classList.add('ok');
       render();
       const fbLista = Object.values(fbDatos)
+        .filter((c) => ((c.dias ?? 999) <= 7))
         .sort((a, b) => (b.score || 0) - (a.score || 0));
       renderBD(meta, mapa.size, fbLista);
     }

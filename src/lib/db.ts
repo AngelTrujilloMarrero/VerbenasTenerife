@@ -1,7 +1,7 @@
 import admin from 'firebase-admin';
 import fs from 'node:fs';
 import { claveDe, fusionarDB, type Fusionable } from './dedup.js';
-import { hoyDMY } from './fechas.js';
+import { esFutura, hoyDMY } from './fechas.js';
 import { normTxt } from './municipios.js';
 import type { Verbena } from './types.js';
 
@@ -97,6 +97,8 @@ export async function volcarVerbenas(
   let escritas = 0, fusionadas = 0;
   const ahora = Date.now();
   for (const v of verbenas) {
+    // Solo presente y futuro: lo pasado no entra en la BD.
+    if (!esFutura(v.day)) continue;
     try {
       const clave = claveDe(v.municipio, v.day, v.titulo, v.orquestas);
       const nuevo: Fusionable = {
@@ -150,7 +152,7 @@ export async function volcarVerbenas(
   } catch (e) {
     console.error('db: meta fallo', (e as Error)?.message || e);
   }
-  return { leidas: verbenas.length, escritas };
+  return { leidas: verbenas.length, escritas, fusionadas };
 }
 
 /** ¿Hay base de datos disponible? (para que la API use fallback local si no). */

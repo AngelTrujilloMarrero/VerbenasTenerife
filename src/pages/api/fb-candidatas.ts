@@ -17,10 +17,12 @@ const json = (obj: unknown, status = 200): Response =>
   });
 
 export const GET: APIRoute = async () => {
+  // Solo hallazgos frescos (post de <=7 días): nada de pasado.
+  const fresca = (c: any): boolean => (c?.dias ?? 999) <= 7;
   const deDb = await leerNodoFB('fb_candidatos');
   if (deDb && Object.keys(deDb).length) {
     const meta = (await leerNodoFB('meta/fb_revision')) || {};
-    const candidatas = Object.values(deDb).sort(
+    const candidatas = Object.values(deDb).filter(fresca).sort(
       (a: any, b: any) => (b.score || 0) - (a.score || 0) || (a.dias ?? 999) - (b.dias ?? 999)
     );
     return json({ ok: true, fuente: 'db', total: candidatas.length, meta, candidatas });
@@ -31,8 +33,9 @@ export const GET: APIRoute = async () => {
         aviso: 'Aún no hay revisión. Ejecuta: pnpm fb:revision' });
     }
     const d = JSON.parse(fs.readFileSync(LOCAL, 'utf8'));
-    return json({ ok: true, fuente: 'local', total: (d.candidatas || []).length,
-      meta: { at: d.actualizadoEl, cuentas: d.cuentas, posts: d.posts }, candidatas: d.candidatas || [] });
+    const candidatas = (d.candidatas || []).filter(fresca);
+    return json({ ok: true, fuente: 'local', total: candidatas.length,
+      meta: { at: d.actualizadoEl, cuentas: d.cuentas, posts: d.posts }, candidatas });
   } catch (e) {
     return json({ ok: false, error: String((e as Error)?.message || e) }, 500);
   }
