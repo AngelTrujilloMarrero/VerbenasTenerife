@@ -94,7 +94,7 @@ async function loteOpenAI(lote, hoy, base, apiKey, model, nombre, cuentaGasto) {
     method: 'POST', headers: { 'Content-Type': 'application/json', ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}) },
     signal: AbortSignal.timeout(90000),
     body: JSON.stringify({
-      model, temperature: 0.1, max_tokens: 2000,
+      model, temperature: 0.1, max_tokens: 4000,
       messages: [
         { role: 'system', content: 'Devuelves SOLO JSON válido, sin explicaciones.' },
         { role: 'user', content: prompt(hoy, lote) }
@@ -120,8 +120,9 @@ async function loteOpenAI(lote, hoy, base, apiKey, model, nombre, cuentaGasto) {
 const PRECIO_DEEPSEEK = { in: 0.27 / 1e6, out: 1.1 / 1e6 };
 export async function verificarConIA(posts, cfg = {}) {
   const out = new Map();
+  const vistos = new Set(); // índices enviados en lotes con éxito (aunque un ítem no traiga veredicto = irrelevante implícito)
   const gasto = { proveedor: null, tokens: 0, costeUSD: 0 };
-  if (!posts.length) return { veredictos: out, gasto };
+  if (!posts.length) return { veredictos: out, gasto, vistos: [] };
   const hoy = cfg.hoy;
   if (cfg.customBase) {
     proveedores.push({ nombre: 'Custom', fn: (l) => loteOpenAI(l, hoy, cfg.customBase, cfg.customKey || '', cfg.customModel || 'qwen3:8b', 'Custom') });
@@ -143,39 +144,59 @@ export async function verificarConIA(posts, cfg = {}) {
     // El roster :free rota; ver modelos gratis hoy en openrouter.ai/models?q=free.
     // 14-sep-2026: liquid/lfm-2.5-2.6b:free (JSON limpio y rápido; el
     // nemotron-3.5 razona en voz alta y agota max_tokens).
-    proveedores.push({ nombre: 'OpenRouter', fn: (l) => loteOpenAI(l, hoy, 'https://openrouter.ai/api/v1', cfg.openrouterKey, cfg.openrouterModel || 'liquid/lfm-2.5-2.6b:free', 'OpenRouter') });
+    // Lotes de 5: los modelos pequeños se pierden con prompts largos.
+    proveedores.push({ nombre: 'OpenRouter', batch: 5, fn: (l) => loteOpenAI(l, hoy, 'https://openrouter.ai/api/v1', cfg.openrouterKey, cfg.openrouterModel || 'liquid/lfm-2.5-2.6b:free', 'OpenRouter') });
   }
   if (cfg.deepseekKey && cfg.pago) {
     proveedores.push({ nombre: 'DeepSeek*', pago: true,
       fn: (l) => loteOpenAI(l, hoy, 'https://api.deepseek.com', cfg.deepseekKey, cfg.deepseekModel || 'deepseek-chat', 'DeepSeek', gasto) });
   }
   // Siempre disponible, sin clave (anónimo: 1 req/15s).
-  proveedores.push({ nombre: 'Pollinations', fn: (l) => loteOpenAI(l, hoy, 'https://text.pollinations.ai/openai', '', 'openai', 'Pollinations'), pausa: 16000 });
+  proveedores.push({ nombre: 'Pollinations', batch: 5, fn: (l) => loteOpenAI(l, hoy, 'https://text.pollinations.ai/openai', '', 'openai', 'Pollinations'), pausa: 16000 });
 
-  for (let i = 0; i < lista.length; i += BATCH) {
-    const lote = lista.slice(i, i + BATCH);
-    let ok = false;
+  for (const p of proveedores) p.batch = p.batch || BATCH;
+  // Reparto por proveedor: cada uno procesa con su tamaño de lote.
+  // Simple: se intenta en orden; el primero que resuelve un lote gana.
+  const pendientes = [...lista];
+  while (pendientes.length) {
+    let avanzo = false;
     for (const p of proveedores) {
+      if (!pendientes.length) break;
+      const lote = pendientes.slice(0, p.batch);
+      let ok = false;
       // Un reintento por proveedor (los tiers gratuitos estrangulan a ratos).
       for (let intento = 0; intento < 2 && !ok; intento++) {
         try {
           if (intento > 0) await new Promise((r) => setTimeout(r, 20000));
           const arr = await p.fn(lote);
           for (const v of Array.isArray(arr) ? arr : []) {
-            if (typeof v.indice === 'number') out.set(v.indice, v);
+            if (typeof v.indice === 'number') {
+              const orig = lote[v.indice];
+              if (orig) out.set(orig.indice, v);
+            }
           }
           ok = true;
         } catch (e) {
-          console.warn(`IA ${p.nombre}: fallo lote ${i / BATCH + 1} intento ${intento + 1} (${String(e.message || e).split('\n')[0].slice(0, 100)})`);
+          console.warn(`IA ${p.nombre}: fallo lote (intento ${intento + 1}, ${lote.length} posts) (${String(e.message || e).split('\n')[0].slice(0, 100)})`);
         }
       }
-      if (ok) { if (p.pago) gasto.proveedor = p.nombre; break; }
+      if (ok) {
+        if (p.pago) gasto.proveedor = p.nombre;
+        for (const it of lote) vistos.add(it.indice);
+        pendientes.splice(0, lote.length);
+        avanzo = true;
+        if (p.pausa) await new Promise((r) => setTimeout(r, p.pausa));
+        break;
+      }
     }
-    if (!ok) console.warn(`IA: lote ${i / BATCH + 1} sin veredicto, decide la regex`);
-    else await new Promise((r) => setTimeout(r, 1000));
+    if (!avanzo) {
+      console.warn(`IA: ${pendientes.length} posts sin veredicto, decide la regex`);
+      break;
+    }
+    await new Promise((r) => setTimeout(r, 1000));
   }
   if (gasto.proveedor) {
     console.log(`IA gasto: ${gasto.tokens} tokens en ${gasto.proveedor} ≈ $${gasto.costeUSD.toFixed(4)}`);
   }
-  return { veredictos: out, gasto };
+  return { veredictos: out, gasto, vistos: [...vistos] };
 }

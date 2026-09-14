@@ -233,6 +233,7 @@ const OPENROUTER_KEY = args['sin-ia'] ? '' : envLocal('OPENROUTER_API_KEY');
 const SOLO_REGEX = args['sin-ia'] || args['solo-regex'] ? true : false;
 let veredictos = new Map();
 let iaCacheHits = 0;
+const vistosIA = new Set();
 {
   const hoyDmy = (() => { const d = new Date(); return `${String(d.getDate()).padStart(2, '0')}-${String(d.getMonth() + 1).padStart(2, '0')}-${d.getFullYear()}`; })();
   // Caché de veredictos en la nube: un post ya juzgado (mismo hash de texto)
@@ -250,7 +251,7 @@ let iaCacheHits = 0;
   const pendientes = [];
   for (const e of pre) {
     const hit = cacheIA.get(e.id + '|' + e.hash);
-    if (hit) { veredictos.set(e.indice, { ...hit, deCache: true }); iaCacheHits++; }
+    if (hit) { veredictos.set(e.indice, { ...hit, deCache: true }); iaCacheHits++; e.cacheHit = true; }
     else pendientes.push(e);
   }
   // Reasigna índices de los pendientes para la IA (el mapa usa e.indice).
@@ -268,7 +269,20 @@ let iaCacheHits = 0;
       const e = pendientes.find((x) => x.iaIdx === k);
       if (e) veredictos.set(e.indice, v);
     }
+    // Índices vistos por la IA (lotes con éxito) mapeados a pre: solo esos
+    // pueden descartarse por "vistos sin veredicto"; los de lotes fallidos
+    // caen al fallback regex en vez de perderse.
+    for (const k of resIA.vistos || []) {
+      const e = pendientes.find((x) => x.iaIdx === k);
+      if (e) vistosIA.add(e.indice);
+    }
+    for (const e of pendientes) {
+      if (e.cacheHit) vistosIA.add(e.indice);
+    }
     console.log(`IA: ${resIA.veredictos.size} veredictos nuevos + ${iaCacheHits} de caché`);
+    for (const [k, v] of veredictos) {
+      if (k < 12) console.log(`  IA #${k}: relevante=${v.relevante !== false} · ${String(v.motivo || '').slice(0, 70)}`);
+    }
   } else if (pre.length) {
     console.log(`2a/3 IA omitida (--sin-ia) o todo en caché (${iaCacheHits}): decide la regex.`);
   }
@@ -276,8 +290,7 @@ let iaCacheHits = 0;
 
 for (const e of pre) {
   const v = veredictos.get(e.indice);
-  if (v && !GEMINI_KEY) { /* imposible, guardia */ }
-  if (veredictos.size && !v) continue; // la IA lo vio y no lo devolvió = irrelevante
+  if (vistosIA.has(e.indice) && !v) continue; // la IA lo vio y no lo devolvió = irrelevante
   if (v && v.relevante === false) continue; // la IA lo descarta aunque la regex lo quisiera
   const motivos = [...e.motivos];
   let eventoDay = e.fEv, score = e.score;
