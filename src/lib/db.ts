@@ -1,5 +1,6 @@
 import admin from 'firebase-admin';
 import fs from 'node:fs';
+import { claveDe, fusionarDB, type Fusionable } from './dedup.js';
 import { hoyDMY } from './fechas.js';
 import { normTxt } from './municipios.js';
 import type { Verbena } from './types.js';
@@ -8,9 +9,18 @@ import type { Verbena } from './types.js';
 // Técnicas anti-duplicados del proyecto admin (AdminDeBelingo):
 // leer-antes-de-escribir, upsert por ID estable con `set` (nunca `push`),
 // comparación normalizada NFD y borrado por ID sin rastros.
+// Plan B Fase 1: además de por ID se fusiona por CLAVE canónica
+// (municipio|day|orquesta), así el mismo baile de dos fuentes colapsa.
 // Sin credenciales no rompe nada: avisa una vez y no persiste.
+export type EstadoEvento = 'activo' | 'cancelado' | 'aplazado';
 export interface EventoDB extends Verbena {
   fuente: string;
+  /** Todas las fuentes que han visto este evento (se acumula al fusionar). */
+  fuentes: string[];
+  /** Clave canónica entre fuentes (ver dedup.ts). */
+  clave: string;
+  /** Ciclo de vida (Fase 3: cancelaciones). Los listados solo enseñan activos. */
+  estado: EstadoEvento;
   actualizadoAt: number;
   /** yyyymmdd para purgar/ordenar por rango en RTDB. */
   dayNum: number;
@@ -76,23 +86,61 @@ function iguales(a: Record<string, unknown>, b: Record<string, unknown>): boolea
   return true;
 }
 
-/** Volcado upsert: solo escribe lo nuevo o cambiado. Devuelve stats. */
+/** Volcado upsert con fusión por clave canónica: solo escribe lo nuevo o
+ *  cambiado, y si otra fuente ya guardó el mismo evento lo fusiona en vez
+ *  de duplicar. Devuelve stats. */
 export async function volcarVerbenas(
   verbenas: Verbena[], fuenteId: string
-): Promise<{ leidas: number; escritas: number }> {
+): Promise<{ leidas: number; escritas: number; fusionadas: number }> {
   const base = db();
-  if (!base) return { leidas: 0, escritas: 0 };
-  let escritas = 0;
+  if (!base) return { leidas: 0, escritas: 0, fusionadas: 0 };
+  let escritas = 0, fusionadas = 0;
   const ahora = Date.now();
   for (const v of verbenas) {
     try {
+      const clave = claveDe(v.municipio, v.day, v.titulo, v.orquestas);
+      const nuevo: Fusionable = {
+        id: v.id, titulo: v.titulo, day: v.day, hora: v.hora,
+        municipio: v.municipio, lugar: v.lugar, orquestas: v.orquestas,
+        tipo: v.tipo, url: v.url, score: v.score, motivos: v.motivos,
+        fuentes: [fuenteId]
+      };
+      // 1) ¿Ya existe con este ID?
       const r = base.ref(`events/${v.id}`);
       const snap = await r.get();
-      const doc: EventoDB = { ...v, fuente: fuenteId, actualizadoAt: ahora, dayNum: dayNum(v.day) };
-      if (!snap.exists() || !iguales(snap.val() as Record<string, unknown>, doc as unknown as Record<string, unknown>)) {
-        await r.set(doc);
-        escritas++;
+      if (snap.exists()) {
+        const prev = snap.val() as EventoDB;
+        const merged = fusionarDB(
+          { ...prev, fuentes: prev.fuentes?.length ? prev.fuentes : [prev.fuente || fuenteId] }, nuevo);
+        const doc: EventoDB = { ...v, ...merged, id: v.id, fuente: merged.fuentes[0],
+          clave, estado: prev.estado || 'activo',
+          actualizadoAt: ahora, dayNum: dayNum(v.day) };
+        if (!iguales(snap.val() as Record<string, unknown>, doc as unknown as Record<string, unknown>)) {
+          await r.set(doc);
+          escritas++;
+        }
+        continue;
       }
+      // 2) ¿Otra fuente lo guardó con otro ID? (misma clave canónica)
+      const q = await base.ref('events').orderByChild('clave').equalTo(clave).limitToFirst(1).get();
+      if (q.exists()) {
+        const key = Object.keys(q.val())[0];
+        const prev = q.val()[key] as EventoDB;
+        const merged = fusionarDB(
+          { ...prev, fuentes: prev.fuentes?.length ? prev.fuentes : [prev.fuente || ''] }, nuevo);
+        const doc: EventoDB = { ...prev, ...merged, id: key, fuente: merged.fuentes[0],
+          clave, estado: prev.estado || 'activo',
+          actualizadoAt: ahora, dayNum: dayNum(merged.day) };
+        await base.ref(`events/${key}`).set(doc);
+        escritas++;
+        fusionadas++;
+        continue;
+      }
+      // 3) Nuevo de verdad.
+      const doc: EventoDB = { ...v, fuente: fuenteId, fuentes: [fuenteId],
+        clave, estado: 'activo', actualizadoAt: ahora, dayNum: dayNum(v.day) };
+      await r.set(doc);
+      escritas++;
     } catch (e) {
       console.error(`db: volcado ${v.id} fallo`, (e as Error)?.message || e);
     }

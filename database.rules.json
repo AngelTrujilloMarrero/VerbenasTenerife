@@ -3,7 +3,7 @@
     ".read": true,
     ".write": true,
     "events": {
-      ".indexOn": ["dayNum", "municipio", "fuente"]
+      ".indexOn": ["dayNum", "municipio", "fuente", "clave", "estado"]
     },
     "meta": {
       ".indexOn": ["at"]

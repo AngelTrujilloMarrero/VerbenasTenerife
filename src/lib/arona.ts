@@ -102,7 +102,8 @@ export async function obtenerVerbenasArona(): Promise<Verbena[]> {
       });
 
       verbenas.push({
-        id: `arona-${it.url.match(/id=(\d+)/)?.[1] || Date.now()}`,
+        // ID estable entre pasadas (antes Date.now(): fila nueva cada vez).
+        id: `arona-${it.url.match(/id=(\d+)/)?.[1] || `${day}-${it.titulo.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').slice(0, 30)}`}`,
         titulo: it.titulo,
         day,
         hora,

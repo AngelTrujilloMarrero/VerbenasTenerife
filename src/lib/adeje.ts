@@ -111,7 +111,8 @@ export async function obtenerVerbenasAdeje(): Promise<Verbena[]> {
         if (n.length > 2 && n.length < 60) orq.push(n);
       });
       verbenas.push({
-        id: `adeje-${it.url.match(/evento\/(\d+)/)?.[1] || Date.now()}`,
+        // ID estable entre pasadas (antes Date.now(): fila nueva cada vez).
+        id: `adeje-${it.url.match(/evento\/(\d+)/)?.[1] || `${day}-${it.titulo.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').slice(0, 30)}`}`,
         titulo: it.titulo,
         day,
         hora,

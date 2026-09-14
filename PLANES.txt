@@ -25,7 +25,7 @@ DIAGNOSTICO (confirmado en codigo):
 - Agravantes: arona.ts:105 y adeje.ts:114 usan Date.now() en el ID.
 - Las candidatas FB (fb-<hash>) viven en otro nodo y nunca se cruzan.
 
-FASE 1 - Clave canonica (prevencion):
+FASE 1 - Clave canonica (prevencion): HECHO 14-sep-2026.
 - Nuevo src/lib/dedup.ts: claveDe(v) = municipio-norm | day |
   orquesta-principal-o-slug-titulo (reutiliza normTxt, toks, esDuplicada).
 - Cada evento lleva clave + fuentes[] acumulativo.
@@ -122,3 +122,18 @@ ORDEN DE COLA:
   3) templadas, 4) frias. Asi, si el Mac se suspende a mitad, lo importante
   ya se reviso.
 - El informe marca por cuenta el motivo de prioridad (temporada/ritmo).
+
+VIGILANCIA ESPECIAL: orquestas con eventos presentes/futuros en BD
+------------------------------------------------------------------
+- Al arrancar cada revision, cruce orquestas de la BD (events con day >= hoy,
+  campo orquestas[]) contra cuentas tipo orquesta en /cuentas (match por
+  nombre normalizado con el diccionario de orquestas.json).
+- Esas cuentas entran SIEMPRE en la pasada (nivel maximo, por encima de
+  temporada y ritmo): son las que pueden anunciar modificaciones,
+  cambios de hora/lugar o cancelaciones de lo ya publicado.
+- revision-auto.mjs compara lo nuevo de esas cuentas contra sus eventos en BD:
+  si el post contradice (cancela, cambia dia/hora/lugar) -> aplica Plan B
+  Fase 3 (auto-cancelar+aviso o correccion); si confirma, refuerza el evento
+  (motivos += "confirmado por la orquesta", score +1).
+- El informe trae seccion propia "Orquestas en cartel vigiladas" con
+  estado por orquesta: sin novedad / modificado / cancelado.
