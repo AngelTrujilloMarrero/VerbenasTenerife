@@ -88,6 +88,13 @@ function antiguedadDias(fecha, revisadoEl) {
   return 999;
 }
 
+function hashTxt(s) {
+  let h = 5381;
+  const t = String(s || '');
+  for (let i = 0; i < t.length; i++) h = (Math.imul(h, 33) ^ t.charCodeAt(i)) >>> 0;
+  return h.toString(36);
+}
+
 function idPost(cuenta, p) {
   const m = String(p.url || '').match(/(?:fbid=|story_fbid=)(\d+)|reel\/(\d+)|\/posts\/(\d+)|(pfbid[\w]+)/);
   if (m) return 'fb-' + (m[1] || m[2] || m[3] || m[4]).slice(0, 40).replace(/[^a-z0-9]/gi, '');
@@ -186,7 +193,8 @@ if (fs.existsSync(POSTS_DIR)) {
       }
       // Pre-filtro barato: a la IA solo lo que huele a verbena (>=2).
       if (score >= 2) {
-        pre.push({ indice: pre.length, cuenta: d.cuenta, url: p.url || '', fecha: p.fecha || '',
+        pre.push({ indice: pre.length, id: idPost(d.cuenta, p), hash: hashTxt(p.texto),
+          cuenta: d.cuenta, url: p.url || '', fecha: p.fecha || '',
           dias, fEv: fEv ? dmyDe(fEv) : '', texto: p.texto.slice(0, 800),
           fotos: (p.imagenes || []).slice(0, 4), pdfs: p.pdfs || [],
           ho, score, motivos, revisadoEl: d.revisadoEl });
@@ -202,21 +210,45 @@ const GROQ_KEY = args['sin-ia'] ? '' : envLocal('GROQ_API_KEY');
 const OPENROUTER_KEY = args['sin-ia'] ? '' : envLocal('OPENROUTER_API_KEY');
 const SOLO_REGEX = args['sin-ia'] || args['solo-regex'] ? true : false;
 let veredictos = new Map();
+let iaCacheHits = 0;
 {
   const hoyDmy = (() => { const d = new Date(); return `${String(d.getDate()).padStart(2, '0')}-${String(d.getMonth() + 1).padStart(2, '0')}-${d.getFullYear()}`; })();
-  if (!SOLO_REGEX && pre.length) {
+  // Caché de veredictos en la nube: un post ya juzgado (mismo hash de texto)
+  // no se vuelve a preguntar; solo los nuevos o editados van a la IA.
+  // Así la página no dispara IAs: lee veredictos guardados, y una nueva
+  // valoración solo ocurre al revisar cuentas (post nuevo) o si la web del
+  // ayuntamiento cambió el evento (vía cruce 2c, sin IA).
+  const cacheIA = new Map();
+  try {
+    const prev = await (await fetch(`${DB}/fb_candidatos.json`)).json() || {};
+    for (const c of Object.values(prev)) {
+      if (c.id && c.textoHash && c.ia) cacheIA.set(c.id + '|' + c.textoHash, c.ia);
+    }
+  } catch { /* sin caché: todo a la IA */ }
+  const pendientes = [];
+  for (const e of pre) {
+    const hit = cacheIA.get(e.id + '|' + e.hash);
+    if (hit) { veredictos.set(e.indice, { ...hit, deCache: true }); iaCacheHits++; }
+    else pendientes.push(e);
+  }
+  // Reasigna índices de los pendientes para la IA (el mapa usa e.indice).
+  pendientes.forEach((e, k) => { e.iaIdx = k; });
+  if (!SOLO_REGEX && pendientes.length) {
     const via = GEMINI_KEY ? `Gemini ${GEMINI_MODEL}` : GROQ_KEY ? 'Groq' : OPENROUTER_KEY ? 'OpenRouter' : 'Pollinations (sin clave)';
-    console.log(`2a/3 Verificando ${pre.length} posts con IA (vía ${via})…`);
+    console.log(`2a/3 Verificando ${pendientes.length} posts nuevos con IA (vía ${via}, ${iaCacheHits} de caché)…`);
     const resIA = await verificarConIA(
-      pre.map((e) => ({ indice: e.indice, cuenta: e.cuenta, fechaPost: e.fecha || `hace ${e.dias} días`, texto: e.texto })),
+      pendientes.map((e) => ({ indice: e.iaIdx, cuenta: e.cuenta, fechaPost: e.fecha || `hace ${e.dias} días`, texto: e.texto })),
       { geminiKey: GEMINI_KEY, geminiModel: GEMINI_MODEL, groqKey: GROQ_KEY, openrouterKey: OPENROUTER_KEY,
         customBase: envLocal('IA_BASE_URL'), customKey: envLocal('IA_API_KEY'), customModel: envLocal('IA_MODEL'),
         deepseekKey: envLocal('DEEPSEEK_API_KEY'), pago: envLocal('IA_PAGO') === '1',
         maxPosts: Number(envLocal('MAX_IA_POSTS') || 120), hoy: hoyDmy });
-    veredictos = resIA.veredictos;
-    console.log(`IA: ${veredictos.size} veredictos de ${pre.length}`);
+    for (const [k, v] of resIA.veredictos) {
+      const e = pendientes.find((x) => x.iaIdx === k);
+      if (e) veredictos.set(e.indice, v);
+    }
+    console.log(`IA: ${resIA.veredictos.size} veredictos nuevos + ${iaCacheHits} de caché`);
   } else if (pre.length) {
-    console.log('2a/3 IA omitida (--sin-ia): decide la regex.');
+    console.log(`2a/3 IA omitida (--sin-ia) o todo en caché (${iaCacheHits}): decide la regex.`);
   }
 }
 
@@ -256,10 +288,14 @@ for (const e of pre) {
   }
   const orquestas = [...(e.ho ? [e.ho.split(' (')[0]] : []), ...orqExtra].filter(Boolean);
   candidatas.push({
-    id: idPost(e.cuenta, { url: e.url, texto: e.texto }),
+    id: e.id,
     cuenta: e.cuenta, fecha: e.fecha, dias: e.dias, url: e.url,
     eventoDay, texto: e.texto.slice(0, 600), fotos: e.fotos, pdfs: e.pdfs,
-    orquestas, score: v ? Math.max(score, 4) : score, motivos, revisadoEl: e.revisadoEl
+    orquestas, score: v ? Math.max(score, 4) : score, motivos, revisadoEl: e.revisadoEl,
+    // Veredicto IA cacheable: la web lee esto, no pregunta a la IA.
+    textoHash: e.hash,
+    ia: v ? { relevante: v.relevante !== false, fechaEvento: v.fechaEvento || null,
+      motivo: String(v.motivo || '').slice(0, 120), deCache: !!v.deCache, at: Date.now() } : null
   });
 }
 candidatas.sort((a, b) => b.score - a.score || a.dias - b.dias);

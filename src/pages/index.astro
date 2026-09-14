@@ -520,7 +520,7 @@ const fbOn = !!(fbConfig.apiKey && fbConfig.databaseURL);
       ).join('') || '<p class="vacio">Sin eventos guardados.</p>';
       // Hallazgos de Facebook (sin fecha exacta del evento): por score
       $('bd-fb').innerHTML = (fbLista && fbLista.length)
-        ? `<div class="bd-dia">📘 Hallazgos de Facebook (${fbLista.length})</div>` +
+        ? `<div class="bd-dia">📘 Facebook verificado por IA (${fbLista.length})</div>` +
           fbLista.map((c) =>
             `<div class="bd-item bd-fb-item"><strong>${esc(c.cuenta || '')}</strong>` +
             ` <span class="lug">${esc(c.fecha || 's/f')}${c.eventoDay ? ` · 📅 ${esc(c.eventoDay)}` : ''} · score ${c.score ?? ''}</span>` +
@@ -532,7 +532,7 @@ const fbOn = !!(fbConfig.apiKey && fbConfig.databaseURL);
         : '';
       $('bd-resumen').textContent =
         `${guardados} eventos de ayuntamientos` +
-        ((fbLista && fbLista.length) ? ` + ${fbLista.length} hallazgos de Facebook` : '') +
+        ((fbLista && fbLista.length) ? ` + ${fbLista.length} verificados por IA en Facebook` : '') +
         ` · ${todas.filter((v) => v.futura).length} próximos en total.`;
       $('bd').hidden = false;
     }
