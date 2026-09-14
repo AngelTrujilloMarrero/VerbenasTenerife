@@ -33,11 +33,12 @@ FASE 1 - Clave canonica (prevencion): HECHO 14-sep-2026.
   database.rules.json); si existe, fusionar en vez de crear fila.
 - Quitar los Date.now() de arona/adeje.
 
-FASE 2 - Limpieza del stock (cura):
-- scripts/dedup-db.mjs con Admin SDK en local: agrupa por (municipio, day),
-  clusteriza con esDuplicada generalizada, conserva la fila mas rica y borra
-  el resto tras copiar fuentes/orquestas. Primero --seco (informa sin borrar),
-  luego real con informe .cache/dedup-*.md.
+FASE 2 - Limpieza del stock (cura): HECHO 14-sep-2026.
+- scripts/dedup-db.mjs (REST, reglas abiertas; backup siempre primero).
+- Medido: 80 events, 21 grupos multi; aplicado: 18 filas borradas
+  (14 clusters), 48 backfill clave/fuentes/estado -> 62 events.
+- Verificado: los 10 grupos multi restantes son eventos distintos legitimos
+  (distinta hora u orquesta). Sin falsos positivos.
 - Cruce events <-> fb_candidatos: si casa (orquesta + municipio + fecha),
   se enlaza (eventoId); si aporta cartel/PDF, se anexa.
 
