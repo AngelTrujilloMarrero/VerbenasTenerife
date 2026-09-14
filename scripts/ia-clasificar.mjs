@@ -40,8 +40,38 @@ ${posts.map((p) => `#${p.indice} [${p.cuenta} · post: ${p.fechaPost}] ${p.texto
 }
 
 function extraerArray(txt) {
-  const m = String(txt || '').match(/\[[\s\S]*\]/);
-  return JSON.parse(m ? m[0] : '[]');
+  const s = String(txt || '').replace(/```json|```/g, '').trim();
+  if (s === '[]') return []; // "nada relevante" explícito (respuesta exacta)
+  // Subcadenas con corchetes balanceados que empiezan por `[{`, de mayor a
+  // menor: el razonamiento trae corchetes en prosa ("[cuenta · ...]") y el
+  // greedy simple los tragaba rompiendo el parse.
+  const candidatos = [];
+  const re = /\[\s*\{/g;
+  let m;
+  while ((m = re.exec(s)) !== null) {
+    let depth = 0, instr = false, esc = false;
+    for (let i = m.index; i < s.length; i++) {
+      const ch = s[i];
+      if (instr) {
+        if (esc) esc = false;
+        else if (ch === '\\') esc = true;
+        else if (ch === '"') instr = false;
+      } else if (ch === '"') instr = true;
+      else if (ch === '[') depth++;
+      else if (ch === ']') {
+        depth--;
+        if (depth === 0) { candidatos.push(s.slice(m.index, i + 1)); break; }
+      }
+    }
+  }
+  candidatos.sort((a, b) => b.length - a.length);
+  for (const c of candidatos) {
+    try {
+      const v = JSON.parse(c);
+      if (Array.isArray(v) && v.some((x) => x && typeof x.indice === 'number')) return v;
+    } catch { /* siguiente candidata */ }
+  }
+  throw new Error('sin JSON válido en la respuesta');
 }
 
 async function loteGemini(lote, hoy, apiKey, model) {
@@ -77,7 +107,11 @@ async function loteOpenAI(lote, hoy, base, apiKey, model, nombre, cuentaGasto) {
     cuentaGasto.costeUSD += (j.usage.prompt_tokens || 0) * PRECIO_DEEPSEEK.in
       + (j.usage.completion_tokens || 0) * PRECIO_DEEPSEEK.out;
   }
-  return extraerArray(j.choices?.[0]?.message?.content);
+  const msg = j.choices?.[0]?.message || {};
+  if (j.error && !msg.content && !msg.reasoning) throw new Error(`${nombre}: ${j.error.message || 'error'}`);
+  // Modelos pequeños con prompt largo devuelven el JSON en `reasoning` y
+  // dejan `content` vacío: se lee ambos.
+  return extraerArray(msg.content || msg.reasoning || '');
 }
 
 /** posts: [{indice, cuenta, fechaPost, texto}]. Devuelve {veredictos, gasto}.
@@ -107,7 +141,9 @@ export async function verificarConIA(posts, cfg = {}) {
   }
   if (cfg.openrouterKey) {
     // El roster :free rota; ver modelos gratis hoy en openrouter.ai/models?q=free.
-    proveedores.push({ nombre: 'OpenRouter', fn: (l) => loteOpenAI(l, hoy, 'https://openrouter.ai/api/v1', cfg.openrouterKey, cfg.openrouterModel || 'nvidia/nemotron-3.5-lightning:free', 'OpenRouter') });
+    // 14-sep-2026: liquid/lfm-2.5-2.6b:free (JSON limpio y rápido; el
+    // nemotron-3.5 razona en voz alta y agota max_tokens).
+    proveedores.push({ nombre: 'OpenRouter', fn: (l) => loteOpenAI(l, hoy, 'https://openrouter.ai/api/v1', cfg.openrouterKey, cfg.openrouterModel || 'liquid/lfm-2.5-2.6b:free', 'OpenRouter') });
   }
   if (cfg.deepseekKey && cfg.pago) {
     proveedores.push({ nombre: 'DeepSeek*', pago: true,
