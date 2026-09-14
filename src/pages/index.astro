@@ -131,11 +131,19 @@ const fbOn = !!(fbConfig.apiKey && fbConfig.databaseURL);
     .bd th { color: #9ca3af; font-weight: 600; }
     .bd td.num { text-align: right; font-variant-numeric: tabular-nums; }
     .bd .ok { color: #4ade80; } .bd .mal { color: #f87171; }
-    .bd details { margin-top: 6px; font-size: 12px; }
-    .bd summary { cursor: pointer; color: #93c5fd; }
-    .bd-evs { margin: 6px 0 2px; padding-left: 18px; color: #d1d5db; }
-    .bd-evs li { margin-bottom: 4px; }
-    .bd-evs em { color: #9ca3af; font-style: normal; }
+    .bd-dia { margin: 14px 0 6px; color: #facc15; font-size: 14px; font-weight: 800;
+      text-transform: uppercase; letter-spacing: .05em; text-align: center; }
+    .bd-item { background: #1f2937; border: 1px solid #374151; border-radius: 8px;
+      padding: 8px 12px; margin-bottom: 6px; font-size: 14px; }
+    .bd-item .fh { font-family: ui-monospace, monospace; font-weight: 800; }
+    .bd-item .lug { color: #9ca3af; }
+    .bd-item .orq { color: #4ade80; }
+    .bd-item s { color: #6b7280; }
+    .bd-fuente { display: inline-block; font-size: 11px; background: rgba(30,58,138,.5);
+      color: #bfdbfe; border-radius: 999px; padding: 1px 8px; margin-left: 6px; }
+    .bd-fuente.fb { background: rgba(6,78,59,.5); color: #6ee7b7; }
+    .bd-fb-item { border-left: 3px solid #6ee7b7; }
+    .bd-fb-item .txt { color: #e5e7eb; font-size: 13px; margin: 4px 0; }
     .bd .muted { color: #6b7280; }
   </style>
 </head>
@@ -191,11 +199,9 @@ const fbOn = !!(fbConfig.apiKey && fbConfig.databaseURL);
 
   <section class="bd" id="bd" hidden>
     <h3>🗄️ En la base de datos</h3>
-    <div class="tabla-ext"><table id="bd-tabla">
-      <thead><tr><th>Fuente</th><th>Guardados</th><th>Próximas</th><th>Actualizado</th><th>Estado</th></tr></thead>
-      <tbody></tbody>
-    </table></div>
-    <small id="bd-total"></small>
+    <p class="muted" id="bd-resumen" style="text-align:center"></p>
+    <div id="bd-lista"></div>
+    <div id="bd-fb"></div>
     <small>Los eventos con más de 2 días pasados se borran automáticamente.</small>
   </section>
 
@@ -447,10 +453,13 @@ const fbOn = !!(fbConfig.apiKey && fbConfig.databaseURL);
         import('firebase/app'), import('firebase/database')
       ]);
       const db = getDatabase(initializeApp(fbConfig));
-      const [ev, me] = await Promise.all([get(ref(db, 'events')), get(ref(db, 'meta'))]);
+      const [ev, me, fb] = await Promise.all([
+        get(ref(db, 'events')), get(ref(db, 'meta')), get(ref(db, 'fb_candidatos')).catch(() => null)
+      ]);
       const datos = ev.val() || null;
       if (!datos || !Object.keys(datos).length) throw new Error('BD vacía');
       const meta = me.val() || {};
+      const fbDatos = (fb && fb.val()) || {};
       // Dedup por ID (patrón admin): el vivo gana si hubiera solape.
       const mapa = new Map();
       Object.entries(datos).forEach(([id, v]) => mapa.set(id, { id, ...v }));
@@ -480,31 +489,49 @@ const fbOn = !!(fbConfig.apiKey && fbConfig.databaseURL);
       bf.textContent = `✓ ${total}/${total} municipios (BD)`;
       bf.classList.add('ok');
       render();
-      renderBD(meta, mapa.size);
+      const fbLista = Object.values(fbDatos)
+        .sort((a, b) => (b.score || 0) - (a.score || 0));
+      renderBD(meta, mapa.size, fbLista);
     }
 
-    function renderBD(meta, guardados) {
-      const tb = document.querySelector('#bd-tabla tbody');
-      tb.innerHTML = fuentes.map((f) => {
-        const m = (meta || {})[f.id];
-        const evs = todas.filter((v) => v.fuente === f.id)
-          .sort((a, b) => (aFecha(a.day) - aFecha(b.day)) || String(a.hora).localeCompare(String(b.hora)));
-        const nFut = evs.filter((v) => v.futura).length;
-        const est = !m ? '<span>—</span>' : m.ok === false
-          ? '<span class="mal">⚠ fallo último raspado</span>' : '<span class="ok">✓ ok</span>';
-        const detalle = evs.length
-          ? `<details><summary>Ver ${evs.length} evento${evs.length === 1 ? '' : 's'}</summary>` +
-            `<ul class="bd-evs">` + evs.map((v) =>
-              `<li>${v.futura ? '' : '<s>'}<strong>${esc(v.day || 's/f')} ${esc(v.hora || '')}</strong> — ${esc(v.titulo)}` +
-              `${v.lugar ? ` <em>(${esc(v.lugar)})</em>` : ''}` +
-              `${(v.orquestas || []).length ? ` 🎵 ${esc(v.orquestas.join(' + '))}` : ''}${v.futura ? '' : '</s>'}</li>`
-            ).join('') + `</ul></details>`
-          : '<span class="muted">vacío</span>';
-        return `<tr><td>${esc(f.nombre)}<br/>${detalle}</td><td class="num">${evs.length}</td>` +
-          `<td class="num">${nFut}</td>` +
-          `<td>${m?.at ? esc(haceX(m.at)) : '—'}</td><td>${est}</td></tr>`;
-      }).join('');
-      $('bd-total').textContent = `${guardados} eventos almacenados en total.`;
+    // Listado cronológico de TODO lo guardado (ayuntamientos + Facebook),
+    // ordenado por hora, no por fuente. Node escribe sus hallazgos de FB en
+    // `fb_candidatos` y aparecen aquí debajo de los eventos con fecha.
+    function renderBD(meta, guardados, fbLista) {
+      const nombreFuente = (id) => (fuentes.find((f) => f.id === id) || {}).nombre || id;
+      // Eventos con fecha, de más próximos a más antiguos
+      const evs = [...todas].sort(ordFut);
+      const grupos = {};
+      evs.forEach((v) => { (grupos[v.day || ''] = grupos[v.day || ''] || []).push(v); });
+      const dias = Object.keys(grupos).sort((x, y) => (aFecha(x) - aFecha(y)) || x.localeCompare(y));
+      $('bd-lista').innerHTML = dias.map((day) =>
+        `<div class="bd-dia">${esc(nombreDia(day))}</div>` +
+        grupos[day].map((v) => {
+          const orq = (v.orquestas || []).join(' + ');
+          const cuerpo = `<span class="fh">${esc(v.hora || '--:--')}</span> ` +
+            `<strong>${esc(v.titulo)}</strong>` +
+            `<span class="lug"> · ${esc(v.lugar ? v.lugar + ', ' : '')}${esc(v.municipio)}</span>` +
+            (orq ? ` <span class="orq">🎵 ${esc(orq)}</span>` : '') +
+            `<span class="bd-fuente">${esc(nombreFuente(v.fuente))}</span>`;
+          return `<div class="bd-item">${v.futura ? cuerpo : `<s>${cuerpo}</s>`}</div>`;
+        }).join('')
+      ).join('') || '<p class="vacio">Sin eventos guardados.</p>';
+      // Hallazgos de Facebook (sin fecha exacta del evento): por score
+      $('bd-fb').innerHTML = (fbLista && fbLista.length)
+        ? `<div class="bd-dia">📘 Hallazgos de Facebook (${fbLista.length})</div>` +
+          fbLista.map((c) =>
+            `<div class="bd-item bd-fb-item"><strong>${esc(c.cuenta || '')}</strong>` +
+            ` <span class="lug">${esc(c.fecha || 's/f')} · score ${c.score ?? ''}</span>` +
+            `<span class="bd-fuente fb">Facebook</span>` +
+            `<p class="txt">${esc((c.texto || '').slice(0, 300))}</p>` +
+            `${(c.pdfs || []).map((p) => `<a href="${esc(p)}" target="_blank" rel="noopener">📄 PDF</a>`).join(' ')}` +
+            `${c.url ? ` <a href="${esc(c.url)}" target="_blank" rel="noopener">🔗 post</a>` : ''}</div>`
+          ).join('')
+        : '';
+      $('bd-resumen').textContent =
+        `${guardados} eventos de ayuntamientos` +
+        ((fbLista && fbLista.length) ? ` + ${fbLista.length} hallazgos de Facebook` : '') +
+        ` · ${todas.filter((v) => v.futura).length} próximos en total.`;
       $('bd').hidden = false;
     }
 
