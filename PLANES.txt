@@ -1,0 +1,124 @@
+PLANES GUARDADOS — VerbenasTenerife (14-sep-2026)
+================================================
+
+PLAN A (aparcado): caffeinate + suspension manual
+------------------------------------------------
+1. En mac/com.verbenas.revision.plist, anteponer /usr/bin/caffeinate -i a los
+   ProgramArguments: impide el reposo por inactividad solo mientras vive la
+   revision; al acabar muere solo y el Mac vuelve a su politica normal.
+2. Reinstalar con launchctl bootout + bootstrap.
+3. Verificar con pmset -g assertions (aparece PreventUserIdleSystemSleep
+   durante la revision, desaparece despues).
+4. Nada de pmset sleepnow: a suspension solo cuando el usuario la pulse.
+
+PLAN B: duplicados + cancelaciones en Firebase
+----------------------------------------------
+Decisiones del usuario: auto-fusionar / auto-cancelar+aviso / conservar marcados.
+
+DIAGNOSTICO (confirmado en codigo):
+- Cada adaptador genera el ID desde su propio slug + hora + 3 primeras
+  palabras del titulo (src/lib/*.ts). El mismo baile visto por ayuntamiento,
+  lagenda y Facebook produce 3 IDs distintos.
+- volcarVerbenas (db.ts) hace upsert por ID: nunca fusiona otro ID.
+- esDuplicada (verbenas.ts) solo fusiona en memoria dentro de una pasada;
+  lo que ya duerme en Firebase con distinto ID jamas se revisita.
+- Agravantes: arona.ts:105 y adeje.ts:114 usan Date.now() en el ID.
+- Las candidatas FB (fb-<hash>) viven en otro nodo y nunca se cruzan.
+
+FASE 1 - Clave canonica (prevencion):
+- Nuevo src/lib/dedup.ts: claveDe(v) = municipio-norm | day |
+  orquesta-principal-o-slug-titulo (reutiliza normTxt, toks, esDuplicada).
+- Cada evento lleva clave + fuentes[] acumulativo.
+- En volcarVerbenas: buscar por clave (orderByChild + indice en
+  database.rules.json); si existe, fusionar en vez de crear fila.
+- Quitar los Date.now() de arona/adeje.
+
+FASE 2 - Limpieza del stock (cura):
+- scripts/dedup-db.mjs con Admin SDK en local: agrupa por (municipio, day),
+  clusteriza con esDuplicada generalizada, conserva la fila mas rica y borra
+  el resto tras copiar fuentes/orquestas. Primero --seco (informa sin borrar),
+  luego real con informe .cache/dedup-*.md.
+- Cruce events <-> fb_candidatos: si casa (orquesta + municipio + fecha),
+  se enlaza (eventoId); si aporta cartel/PDF, se anexa.
+
+FASE 3 - Ciclo de vida y cancelaciones:
+- Campo estado: activo | cancelado | aplazado en EventoDB; listados excluyen
+  lo no-activo pero se conserva.
+- Deteccion en revision-auto.mjs: cancel|suspen|aplaz|no se celebrar +
+  contexto musical + fecha futura -> marca cancelado con
+  motivoCancelacion=<url post>. Confianza baja -> posibleCancelacion:true.
+- Aviso en meta/fb_revision + notificacion macOS + avisar() (/api/estado.json).
+- Si luego aparece "se retoma / nueva fecha", vuelve a activo.
+
+FASE 4 - Verificacion:
+- pnpm build + prueba --seco; comprobar /candidatas y final de portada.
+- Commits separados por fase para revertir por partes.
+
+PREGUNTA ABIERTA: orden de ejecucion (Fase 1 primero y luego 2 y 3, o
+cancelaciones antes que limpieza).
+
+PLAN C (nuevo): ritmo por actividad de cada cuenta
+--------------------------------------------------
+Motivo: de las 243 cuentas, muchas estan abandonadas; revisarlas cada 2-3 dias
+quema tiempo y llamadas. Ritmo segun actividad real observada + tipo.
+
+MEDICION (automatica, sin trabajo manual):
+- Cada revision ya guarda por cuenta: revisadoEl + fecha de sus ultimos posts.
+- revision-auto.mjs calculara por cuenta: diasUltimoPost y postsPorSemana.
+- Se guarda en fb_cuentas/{id}: ultimaActividad, ritmo.
+
+NIVELES:
+- caliente (ultimo post < 7 dias): entra en cada revision (2-3 dias).
+- templada (7-30 dias): una vez por semana.
+- fria (30-90 dias o sin posts en 2 revisiones): una vez al mes.
+- abandonada (> 90 dias o muro vacio/privado 3 revisiones seguidas):
+  se pausa (activa=false) y sale del circuito hasta revision manual.
+
+PESO POR TIPO (ajuste inicial, luego manda lo observado):
+- orquesta / comision en temporada: tienden a caliente; fuera de temporada
+  pueden caer a templada sin que sea abandono.
+- ayuntamiento: ritmo estable; si cae a fria, sospecha de cambio de canal
+  (avisar, quizas migraron a Instagram).
+- otro (medios, varios): solo templada/fria salvo pico de actividad.
+
+IMPLEMENTACION:
+- monitor --todas acepta --nivel=caliente|templada|fria|todo y filtra por
+  ritmo (por defecto: caliente + templada; una vez/semana pasada completa).
+- El LaunchAgent alterna: revision corta (caliente+templada) cada encendido,
+  completa (--nivel=todo) si hace > 7 dias de la ultima completa.
+- Informe incluye tabla de actividad por tipo (cuantas calientes/templadas/
+  frias/abandonadas en ayuntamientos, orquestas, comisiones, otros).
+- Primera pasada: las 243 se miden todas; los niveles aplican desde la
+  segunda revision.
+
+PLAN D (nuevo): prioridad por temporada y zona (calendario 2024-2025)
+--------------------------------------------------------------------
+Idea: revisar primero las zonas que estan a punto de entrar en fiestas,
+usando el historico estatico como calendario.
+
+PASO 0 - Conseguir el calendario: HECHO 14-sep-2026.
+- Encontrados en ../AdminDeBelingo/public/events-archive/{2024,2025}.json
+  (92 + 1215 eventos con municipio + day).
+- scripts/generar-calendario.mjs -> src/lib/data/calendario-fiestas.json
+  (31 municipios, 1307 eventos; meses calientes = >=15% del total, min 2).
+- OJO: los nombres vienen en forma corta ("Laguna", "Guia"); al consumir hay
+  que normalizar contra MUNICIPIOS_31 (normTxt).
+- Recalibracion anual: 2026 sera historia del 2027 (re-ejecutar el script).
+
+PRIORIDAD POR CUENTA EN CADA REVISION:
+- Cada cuenta lleva municipio (ya lo tiene en /cuentas). Ventana de
+  pre-fiesta: 30 dias antes del primer mes caliente de su municipio, y toda
+  la temporada: esas cuentas suben a revision en cada pasada aunque su ritmo
+  base sea templada/fria (Plan C).
+- Comisiones y orquestas heredan el municipio que vigilan (el de su cuenta);
+  las orquestas que tocan en varios municipios suben si ALGUNO esta en
+  ventana (se sabe por sus posts, sin dato extra).
+- Proximidad (opcional, barato con coords.ts que ya existe): cuentas a menos
+  de ~15 km de un municipio en temporada reciben impulso medio (las fiestas
+  atraen orquestas y publico de alrededor).
+
+ORDEN DE COLA:
+- monitor --todas ordena: 1) zona en temporada/pre-fiesta, 2) calientes,
+  3) templadas, 4) frias. Asi, si el Mac se suspende a mitad, lo importante
+  ya se reviso.
+- El informe marca por cuenta el motivo de prioridad (temporada/ritmo).
