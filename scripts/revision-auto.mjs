@@ -50,6 +50,11 @@ const norm = (s) => ' ' + String(s || '').toLowerCase().replace(/[.,;:()"“”�
 const RE_VERBENA = /(gran baile|baile|verbena|verbenazo|tardeo|noche latina|noche en blanco|latinazo|baile de magos|orquesta)/i;
 const RE_ANTI = /infantil|familiar|beb[ée]cuento|hinchables?|tercera edad|tercera juventud|\bmayores\b|misa|procesi[óo]n|rosario/i;
 const RE_HORA = /(19|2[0-3]):\d{2}/;
+// Fase 3: señales de ciclo de vida en posts de orquestas/cuentas.
+const RE_CANCEL = /cancel|suspen|aplaz|no se celebrar|no podremos estar|comunica(do|mos).*susp/i;
+const RE_RETOMAR = /retom|se mantiene|finalmente s[ií]|nueva fecha|aplazado al/i;
+const DB = 'https://verbenastenerife-default-rtdb.europe-west1.firebasedatabase.app';
+const alnum = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '');
 
 function orquestaEn(texto) {
   const hay = norm(texto);
@@ -80,7 +85,24 @@ function antiguedadDias(fecha, revisadoEl) {
   return 999;
 }
 
+function idPost(cuenta, p) {
+  const m = String(p.url || '').match(/(?:fbid=|story_fbid=)(\d+)|reel\/(\d+)|\/posts\/(\d+)|(pfbid[\w]+)/);
+  if (m) return 'fb-' + (m[1] || m[2] || m[3] || m[4]).slice(0, 40).replace(/[^a-z0-9]/gi, '');
+  // Hash estable de url+texto (el base64 del prefijo colisionaba: todas las
+  // URLs comparten https://www.facebook.com/).
+  let h1 = 0xdeadbeef, h2 = 0x41c6ce57;
+  const s = `${cuenta}|${p.url || ''}|${(p.texto || '').slice(0, 80)}`;
+  for (let i = 0; i < s.length; i++) {
+    const ch = s.charCodeAt(i);
+    h1 = Math.imul(h1 ^ ch, 2654435761); h2 = Math.imul(h2 ^ ch, 1597334677);
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  return 'fb-' + (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(36);
+}
+
 const candidatas = [];
+const senales = []; // {tipo: 'cancelacion'|'retomar', orquesta, cuenta, url, texto, fecha}
 let totalPosts = 0, cuentas = 0;
 if (fs.existsSync(POSTS_DIR)) {
   for (const f of fs.readdirSync(POSTS_DIR).filter((x) => x.endsWith('.json'))) {
@@ -99,9 +121,18 @@ if (fs.existsSync(POSTS_DIR)) {
       if (/plaza|parque|recinto/i.test(p.texto)) { score += 1; motivos.push('lugar verbena'); }
       if (RE_ANTI.test(p.texto)) { score -= 4; motivos.push('penalización no-verbena'); }
       const dias = antiguedadDias(p.fecha, d.revisadoEl);
+      // Señales de ciclo de vida: solo posts frescos (<=10 días) con orquesta.
+      if (dias <= 10) {
+        const hoNombre = (ho || '').split(' (')[0];
+        if (hoNombre && RE_CANCEL.test(p.texto)) {
+          senales.push({ tipo: 'cancelacion', orquesta: hoNombre, cuenta: d.cuenta, url: p.url || '', texto: p.texto.slice(0, 300), fecha: p.fecha || '' });
+        } else if (hoNombre && RE_RETOMAR.test(p.texto)) {
+          senales.push({ tipo: 'retomar', orquesta: hoNombre, cuenta: d.cuenta, url: p.url || '', texto: p.texto.slice(0, 300), fecha: p.fecha || '' });
+        }
+      }
       if (score >= 4) {
         candidatas.push({
-          id: 'fb-' + Buffer.from(p.url || (d.cuenta + p.texto.slice(0, 40))).toString('base64').replace(/[^a-z0-9]/gi, '').slice(0, 24),
+          id: idPost(d.cuenta, p),
           cuenta: d.cuenta, fecha: p.fecha || '', dias, url: p.url || '',
           texto: p.texto.slice(0, 600), fotos: (p.imagenes || []).slice(0, 4), pdfs: p.pdfs || [],
           score, motivos, revisadoEl: d.revisadoEl
@@ -111,6 +142,49 @@ if (fs.existsSync(POSTS_DIR)) {
   }
 }
 candidatas.sort((a, b) => b.score - a.score || a.dias - b.dias);
+
+// ---------- 2b. Cruce con eventos en BD: cancelaciones y retomadas ----------
+console.log('2b/3 Ciclo de vida…');
+const hoyN = (() => { const d = new Date(); return d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate(); })();
+const cambiosEstado = []; // {id, titulo, day, de, a, motivo}
+try {
+  const events = await (await fetch(`${DB}/events.json`)).json() || {};
+  const lista = Object.entries(events).map(([id, v]) => ({ id, ...v }));
+  const deOrquesta = (nombre) => {
+    const n = alnum(nombre);
+    return lista.filter((e) => (e.dayNum || 0) >= hoyN && (e.orquestas || []).some((o) => {
+      const a = alnum(o);
+      return a && (a === n || a.includes(n) || n.includes(a));
+    }));
+  };
+  for (const s of senales) {
+    const evs = deOrquesta(s.orquesta);
+    if (s.tipo === 'cancelacion') {
+      if (evs.length === 1) {
+        const e = evs[0];
+        await fetch(`${DB}/events/${e.id}.json`, { method: 'PATCH',
+          body: JSON.stringify({ estado: 'cancelado', motivoCancelacion: s.url, actualizadoAt: Date.now() }) });
+        cambiosEstado.push({ id: e.id, titulo: e.titulo, day: e.day, de: e.estado || 'activo', a: 'cancelado', motivo: s.url });
+      } else if (evs.length > 1) {
+        for (const e of evs) {
+          await fetch(`${DB}/events/${e.id}.json`, { method: 'PATCH',
+            body: JSON.stringify({ posibleCancelacion: true, motivoCancelacion: s.url }) });
+        }
+        cambiosEstado.push({ id: evs[0].id, titulo: `${evs.length} eventos de ${s.orquesta}`, day: '', de: 'activo', a: 'posible-cancelacion', motivo: s.url });
+      }
+    } else if (s.tipo === 'retomar') {
+      const canc = evs.filter((e) => e.estado === 'cancelado');
+      for (const e of canc) {
+        await fetch(`${DB}/events/${e.id}.json`, { method: 'PATCH',
+          body: JSON.stringify({ estado: 'activo', motivoCancelacion: null, posibleCancelacion: null, actualizadoAt: Date.now() }) });
+        cambiosEstado.push({ id: e.id, titulo: e.titulo, day: e.day, de: 'cancelado', a: 'activo', motivo: s.url });
+      }
+    }
+  }
+  console.log(`Señales: ${senales.length} · cambios de estado: ${cambiosEstado.length}`);
+} catch (e) {
+  console.log('Ciclo de vida omitido (' + (e.message || e).split('\n')[0] + ')');
+}
 
 // ---------- 3. Guardado: informe + Firebase ----------
 const hoy = new Date().toISOString().slice(0, 10);
@@ -127,43 +201,34 @@ if (candidatas.length) {
 } else {
   md += `Sin candidatas esta vez.\n`;
 }
+if (cambiosEstado.length) {
+  md += `## Cambios de estado\n\n`;
+  for (const c of cambiosEstado) {
+    md += `- ${c.titulo} (${c.day || 's/f'}): ${c.de} → **${c.a}** · ${c.motivo}\n`;
+  }
+  md += '\n';
+}
 fs.writeFileSync(informe, md);
 // Listado completo para la web (/api/fb-candidatas lo sirve si no hay Firebase).
 fs.writeFileSync(path.join(ROOT, '.cache', 'fb-candidatas.json'),
   JSON.stringify({ actualizadoEl: new Date().toISOString(), cuentas, posts: totalPosts, candidatas }, null, 2));
 console.log(`3/3 Informe: .cache/fb-revision-${hoy}.md (${candidatas.length} candidatas de ${totalPosts} posts en ${cuentas} cuentas)`);
 
-// Volcado a Firebase con Admin SDK (lectura pública, escritura solo servidor).
-function cargarEnv() {
-  const f = path.join(ROOT, '.env');
-  if (!fs.existsSync(f)) return;
-  for (const lin of fs.readFileSync(f, 'utf8').split('\n')) {
-    const m = lin.match(/^([A-Z_]+)=(.*)$/);
-    if (m && !process.env[m[1]]) process.env[m[1]] = m[2].trim();
-  }
-}
-cargarEnv();
+// Volcado a Firebase por REST (las reglas están abiertas; sin service account
+// no hay Admin SDK, pero el PUT anónimo vale igual para estos nodos).
 try {
-  const { default: admin } = await import('firebase-admin');
-  const sa = (process.env.FIREBASE_SERVICE_ACCOUNT_JSON || '').trim();
-  const url = (process.env.PUBLIC_FIREBASE_DATABASE_URL || '').trim();
-  const cred = sa.startsWith('{') ? JSON.parse(sa)
-    : sa ? JSON.parse(fs.readFileSync(path.isAbsolute(sa) ? sa : path.join(ROOT, sa), 'utf8')) : null;
-  if (cred && url) {
-    const app = admin.initializeApp({ credential: admin.credential.cert(cred), databaseURL: url });
-    const db = admin.database(app);
-    for (const c of candidatas) await db.ref(`fb_candidatos/${c.id}`).set(c);
-    await db.ref('meta/fb_revision').set({ at: Date.now(), cuentas, posts: totalPosts, candidatas: candidatas.length });
-    console.log(`Firebase: ${candidatas.length} candidatas en fb_candidatos + meta/fb_revision ✓`);
-    await app.delete();
-  } else {
-    console.log('Firebase: sin credenciales en .env (informe local igualmente guardado).');
+  for (const c of candidatas) {
+    const r = await fetch(`${DB}/fb_candidatos/${c.id}.json`, { method: 'PUT', body: JSON.stringify(c) });
+    if (!r.ok) throw new Error(`PUT fb_candidatos: HTTP ${r.status}`);
   }
+  await fetch(`${DB}/meta/fb_revision.json`, { method: 'PUT',
+    body: JSON.stringify({ at: Date.now(), cuentas, posts: totalPosts, candidatas: candidatas.length, cambiosEstado: cambiosEstado.length }) });
+  console.log(`Firebase: ${candidatas.length} candidatas + meta/fb_revision ✓`);
 } catch (e) {
   console.log('Firebase: no se pudo volcar (' + (e.message || e).split('\n')[0] + '). Informe local OK.');
 }
 
 if (!args['sin-extraer']) {
   fs.writeFileSync(STAMP, String(Date.now()));
-  try { execFileSync('osascript', ['-e', `display notification "${candidatas.length} candidatas de ${cuentas} cuentas" with title "Verbenas: revisión Facebook lista"`]); } catch { /* sin GUI */ }
+  try { execFileSync('osascript', ['-e', `display notification "${candidatas.length} candidatas, ${cambiosEstado.length} cambios de estado" with title "Verbenas: revisión Facebook lista"`]); } catch { /* sin GUI */ }
 }

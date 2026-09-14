@@ -1,11 +1,27 @@
 ---
 export const prerender = false;
+// Config Firebase web (solo pública) para leer fb_candidatos directo:
+// en Vercel no hay .cache local ni service account, pero la lectura
+// pública sí llega. Si falla o está vacía, se cae a /api/fb-candidatas.
+const fbConfig = {
+  apiKey: import.meta.env.PUBLIC_FIREBASE_API_KEY || '',
+  authDomain: import.meta.env.PUBLIC_FIREBASE_AUTH_DOMAIN || '',
+  databaseURL: import.meta.env.PUBLIC_FIREBASE_DATABASE_URL || '',
+  projectId: import.meta.env.PUBLIC_FIREBASE_PROJECT_ID || ''
+};
+const fbOn = !!(fbConfig.apiKey && fbConfig.databaseURL);
 ---
 <html lang="es">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Candidatas Facebook — Verbenas Tenerife</title>
+  <script type="importmap">
+    { "imports": {
+      "firebase/app": "https://esm.sh/firebase@12.19.0/app",
+      "firebase/database": "https://esm.sh/firebase@12.19.0/database"
+    } }
+  </script>
   <style is:global>
     * { box-sizing: border-box; }
     body { margin: 0; font-family: system-ui, -apple-system, sans-serif; background: #111827; color: #fff; }
@@ -46,7 +62,7 @@ export const prerender = false;
     <main id="lista"></main>
   </div>
 
-  <script>
+  <script define:vars={{ fbConfig, fbOn }}>
     const $ = (id) => document.getElementById(id);
     let todas = [];
     const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) =>
@@ -82,16 +98,43 @@ export const prerender = false;
         : '<p class="vacio">Sin candidatas con ese filtro.</p>';
     }
 
+    async function viaBD() {
+      const [{ initializeApp }, { getDatabase, ref, get }] = await Promise.all([
+        import('firebase/app'), import('firebase/database')
+      ]);
+      const db = getDatabase(initializeApp(fbConfig), fbConfig.databaseURL);
+      const snap = await get(ref(db, 'fb_candidatos'));
+      const val = snap.val() || {};
+      const lista = Object.values(val).sort((a, b) => (b.score || 0) - (a.score || 0));
+      if (!lista.length) throw new Error('BD vacía');
+      return lista;
+    }
+
+    async function viaAPI() {
+      const r = await fetch('/api/fb-candidatas');
+      const d = await r.json();
+      if (!d.ok) throw new Error(d.error || 'fallo');
+      return { lista: d.candidatas || [], nota: d };
+    }
+
     async function main() {
+      // 1º Firebase directo (funciona en Vercel), 2º API local.
       try {
-        const r = await fetch('/api/fb-candidatas');
-        const d = await r.json();
-        if (!d.ok) throw new Error(d.error || 'fallo');
-        todas = d.candidatas || [];
-        const fuente = d.fuente === 'db' ? 'Firebase' : d.fuente === 'local' ? 'revisión local' : '—';
-        $('info').textContent = `${d.total} candidatas · fuente: ${fuente}` +
-          (d.meta?.at || d.meta?.actualizadoEl ? ` · actualizado: ${esc(d.meta.at ? new Date(d.meta.at).toLocaleString('es-ES') : d.meta.actualizadoEl)}` : '') +
-          (d.aviso ? ` · ${d.aviso}` : '');
+        if (!fbOn) throw new Error('sin config Firebase');
+        todas = await viaBD();
+        $('info').textContent = `${todas.length} candidatas · fuente: Firebase`;
+        render();
+        return;
+      } catch (e) {
+        console.warn('BD no disponible, vía API:', e?.message || e);
+      }
+      try {
+        const { lista, nota } = await viaAPI();
+        todas = lista;
+        const fuente = nota.fuente === 'db' ? 'Firebase' : nota.fuente === 'local' ? 'revisión local' : '—';
+        $('info').textContent = `${nota.total} candidatas · fuente: ${fuente}` +
+          (nota.meta?.at || nota.meta?.actualizadoEl ? ` · actualizado: ${esc(nota.meta.at ? new Date(nota.meta.at).toLocaleString('es-ES') : nota.meta.actualizadoEl)}` : '') +
+          (nota.aviso ? ` · ${nota.aviso}` : '');
         render();
       } catch (e) {
         $('info').textContent = 'Error: ' + e.message;

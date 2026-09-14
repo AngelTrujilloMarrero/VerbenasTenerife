@@ -42,18 +42,25 @@ FASE 2 - Limpieza del stock (cura): HECHO 14-sep-2026.
 - Cruce events <-> fb_candidatos: si casa (orquesta + municipio + fecha),
   se enlaza (eventoId); si aporta cartel/PDF, se anexa.
 
-FASE 3 - Ciclo de vida y cancelaciones:
-- Campo estado: activo | cancelado | aplazado en EventoDB; listados excluyen
-  lo no-activo pero se conserva.
-- Deteccion en revision-auto.mjs: cancel|suspen|aplaz|no se celebrar +
-  contexto musical + fecha futura -> marca cancelado con
-  motivoCancelacion=<url post>. Confianza baja -> posibleCancelacion:true.
-- Aviso en meta/fb_revision + notificacion macOS + avisar() (/api/estado.json).
-- Si luego aparece "se retoma / nueva fecha", vuelve a activo.
+FASE 3 - Ciclo de vida y cancelaciones: HECHO 14-sep-2026.
+- revision-auto.mjs detecta cancel|suspend|aplaz (+retomar) con orquesta en
+  posts frescos; 1 evento futuro -> auto-cancela (estado+motivo); varios ->
+  posibleCancelacion. Retomar -> vuelve a activo.
+- Volcado a Firebase por REST (reglas abiertas): 157 candidatas en
+  fb_candidatos + meta/fb_revision. Corregida colision de IDs (base64 del
+  prefijo comun): id por fbid/pfbid o hash estable (147 unicas reales).
+- /candidatas lee Firebase directo (vale en Vercel) con fallback a la API.
+- Primera pasada real: 0 senales (nadie cancela hoy).
+- Aviso en meta/fb_revision + notificacion macOS (avisar() a /api/estado.json
+  queda para cuando el servidor tenga service account).
 
-FASE 4 - Verificacion:
-- pnpm build + prueba --seco; comprobar /candidatas y final de portada.
-- Commits separados por fase para revertir por partes.
+FASE 4 - Verificacion: HECHO 14-sep-2026.
+- dedup --seco primero (14 clusters correctos), aplicado: 80 -> 62 events;
+  los 10 grupos multi restantes son eventos distintos legitimos.
+- revision --sin-extraer: 157 candidatas de 723 posts; volcado REST verificado
+  en Firebase (fb_candidatos + meta/fb_revision); IDs sin colisiones.
+- pnpm build OK; /api/fb-candidatas y /candidatas HTTP 200.
+- Commits separados por fase (f93dc25, 4969053, este).
 
 PREGUNTA ABIERTA: orden de ejecucion (Fase 1 primero y luego 2 y 3, o
 cancelaciones antes que limpieza).
