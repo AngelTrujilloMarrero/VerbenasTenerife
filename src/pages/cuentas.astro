@@ -52,7 +52,7 @@ const municipios = [...MUNICIPIOS_31, 'Fuera de Tenerife'];
     <h1>📘 Cuentas de Facebook a vigilar</h1>
     <p>Solo páginas públicas, sin login · se revisan 1 vez cada 2-3 días (mar→jue noche)</p>
   </header>
-  <nav class="top-nav"><a href="/">← Volver a verbenas</a> · <span class="muted" id="info-fuente"></span></nav>
+  <nav class="top-nav"><a href="/">← Volver a verbenas</a> · <a href="/lectura">📡 Lectura</a> · <span class="muted" id="info-fuente"></span></nav>
 
   <div class="wrap">
     <div class="msg" id="msg"></div>
@@ -116,6 +116,8 @@ const municipios = [...MUNICIPIOS_31, 'Fuera de Tenerife'];
 
     const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) =>
       ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    // Ritmo medido por revision-auto.mjs (Plan C); sin medir no se muestra.
+    const RITMO = { caliente: '🔥 caliente', templada: '🌤️ templada', fria: '❄️ fría', abandonada: '💤 abandonada' };
 
     function avisa(texto, ok = true) {
       msg.className = 'msg ' + (ok ? 'ok' : 'err');
@@ -140,7 +142,7 @@ const municipios = [...MUNICIPIOS_31, 'Fuera de Tenerife'];
             <td><strong>${esc(c.nombre)}</strong><br/>
               <a href="${esc(c.url)}" target="_blank" rel="noopener" class="muted">${esc(c.handle || c.url)}</a></td>
             <td>${esc(c.municipio || '—')}<br/><span class="badge tipo">${esc(c.tipo)}</span></td>
-            <td>${c.activa ? '<span class="badge ok">● activa</span>' : '<span class="badge off">○ pausada</span>'}</td>
+            <td>${c.activa ? '<span class="badge ok">● activa</span>' : '<span class="badge off">○ pausada</span>'}${c.ritmo ? `<br/><span class="badge tipo">${RITMO[c.ritmo] || esc(c.ritmo)}</span>` : ''}${c.ultimaActividad ? `<br/><span class="muted">hace ${Math.max(0, Math.round((Date.now() - c.ultimaActividad) / 864e5))}d · ${c.postsVistos ?? '?'} posts</span>` : ''}</td>
             <td class="num">
               <button class="btn btn-edit" data-edit="${esc(c.id)}">✏️ Editar</button>
               <button class="btn btn-del" data-del="${esc(c.id)}">🗑️ Borrar</button>

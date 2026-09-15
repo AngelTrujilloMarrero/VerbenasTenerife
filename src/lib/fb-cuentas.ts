@@ -13,7 +13,20 @@ export interface CuentaFB {
   activa: boolean;
   createdAt: number;
   updatedAt: number;
+  // Medición de actividad (la escribe scripts/revision-auto.mjs en cada
+  // pasada; Plan C de PLANES.txt). Opcionales: las viejas siguen valiendo.
+  /** ms del post más reciente visto (0 = aún sin medir). */
+  ultimaActividad?: number;
+  /** caliente (<7d) | templada (<30d) | fria (<1 año) | abandonada (+1 año). */
+  ritmo?: 'caliente' | 'templada' | 'fria' | 'abandonada';
+  /** Pasadas seguidas sin posts (muro vacío/privado). */
+  fallosSeguidos?: number;
+  /** Posts vistos en la última pasada (base de la escala de actividad). */
+  postsVistos?: number;
 }
+
+export const RITMOS_CUENTA = ['caliente', 'templada', 'fria', 'abandonada'] as const;
+export type RitmoCuentaFB = (typeof RITMOS_CUENTA)[number];
 
 export const TIPOS_CUENTA: TipoCuentaFB[] = ['ayuntamiento', 'comision', 'orquesta', 'otro'];
 

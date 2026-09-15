@@ -3,6 +3,8 @@
 // Uso manual: node scripts/revision-auto.mjs [--forzar] [--sin-extraer]
 //   --forzar: ignora el guardado de 20h (si ya se revisó hoy, no repite)
 //   --sin-extraer: no abre el navegador, solo clasifica lo ya descargado
+//   --nivel=auto|todo|caliente|templada|fria: alcance (se reenvía al monitor)
+//   --posts=N (1-10): posts por cuenta (se reenvía al monitor)
 import { execFileSync, execSync, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -34,21 +36,56 @@ try {
   }
 } catch { /* sin pgrep: se sigue */ }
 
+// El LaunchAgent no tiene PATH con homebrew: 'node' pelado muere con
+// ENOENT (status null). Se usa el mismo binario que ejecuta este script.
+const NODE = process.execPath;
+
+// DB primero: el progreso temprano (y la web /lectura) la necesitan antes
+// de la fase de clasificación.
+const DB = 'https://verbenastenerife-default-rtdb.europe-west1.firebasedatabase.app';
+
+// Progreso visible en la web (/api/fb-progreso → /lectura): fichero local +
+// espejo en Firebase (en Vercel no hay .cache). Best-effort, nunca bloquea.
+const PROGRESO = path.join(ROOT, '.cache', 'fb-progreso.json');
+function leerProgreso() {
+  try { return JSON.parse(fs.readFileSync(PROGRESO, 'utf8')); } catch { return {}; }
+}
+async function marcarProgreso(parche) {
+  const doc = { ...leerProgreso(), ...parche, actualizadoEl: new Date().toISOString() };
+  try {
+    fs.mkdirSync(path.dirname(PROGRESO), { recursive: true });
+    // Atómico (tmp+rename): la API lo lee en caliente.
+    fs.writeFileSync(PROGRESO + '.tmp', JSON.stringify(doc, null, 2));
+    fs.renameSync(PROGRESO + '.tmp', PROGRESO);
+  } catch { /* disco lleno: se sigue */ }
+  try {
+    await fetch(`${DB}/meta/fb_progreso.json`, { method: 'PUT', body: JSON.stringify(doc) });
+  } catch { /* sin red: el fichero local vale */ }
+}
+
 // ---------- 1. Extracción ----------
 if (!args['sin-extraer']) {
-  console.log('1/3 Extrayendo últimos posts de las cuentas…');
-  const r = spawnSync('node', ['scripts/monitor-facebook-browser.mjs', '--todas', '--posts=3'],
+  const nivelR = String(args.nivel || 'auto').toLowerCase();
+  const postsR = Math.max(1, Math.min(Number(args.posts || 3), 10));
+  console.log(`1/3 Extrayendo últimos posts de las cuentas (nivel=${nivelR}, posts=${postsR})…`);
+  await marcarProgreso({ estado: 'en-curso', fase: 'extrayendo', inicio: Date.now(),
+    cuentasHechas: 0, cuentasTotal: 0, cuentaActual: '' });
+  const r = spawnSync(NODE, ['scripts/monitor-facebook-browser.mjs', '--todas',
+    `--nivel=${nivelR}`, `--posts=${postsR}`],
     { cwd: ROOT, stdio: 'inherit' });
-  if (r.status !== 0) console.warn('Extracción acabó con código', r.status, '(se clasifica lo que haya)');
+  if (r.status !== 0) console.warn('Extracción acabó con código', r.status, `(signal ${r.signal || '-'}, error ${r.error?.message || '-'})`, '(se clasifica lo que haya)');
+  await marcarProgreso({ fase: 'ocr' });
 } else {
   console.log('1/3 Extracción omitida (--sin-extraer).');
+  await marcarProgreso({ estado: 'en-curso', fase: 'clasificando', inicio: Date.now() });
 }
 
 // ---------- 2a-bis. OCR de carteles (fotos de posts pre-filtrados) ----------
 if (!args['sin-extraer'] || args['con-ocr']) {
   console.log('2a-bis/3 OCR de carteles…');
-  const r = spawnSync('node', ['scripts/ocr-fb.mjs'], { cwd: ROOT, stdio: 'inherit' });
-  if (r.status !== 0) console.warn('OCR-FB acabó con código', r.status, '(se clasifica sin carteles)');
+  const r = spawnSync(NODE, ['scripts/ocr-fb.mjs'], { cwd: ROOT, stdio: 'inherit' });
+  if (r.status !== 0) console.warn('OCR-FB acabó con código', r.status, `(signal ${r.signal || '-'}, error ${r.error?.message || '-'})`, '(se clasifica sin carteles)');
+  await marcarProgreso({ fase: 'clasificando' });
 }
 
 // ---------- 2. Clasificación ----------
@@ -63,7 +100,7 @@ const RE_HORA = /(19|2[0-3]):\d{2}/;
 // Fase 3: señales de ciclo de vida en posts de orquestas/cuentas.
 const RE_CANCEL = /cancel|suspen|aplaz|no se celebrar|no podremos estar|comunica(do|mos).*susp/i;
 const RE_RETOMAR = /retom|se mantiene|finalmente s[ií]|nueva fecha|aplazado al/i;
-const DB = 'https://verbenastenerife-default-rtdb.europe-west1.firebasedatabase.app';
+// DB definida arriba (la usa también el progreso temprano).
 const alnum = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '');
 
 function orquestaEn(texto) {
@@ -138,9 +175,11 @@ function fechaEvento(postISO, diasPost, texto) {
   if (/\bpasado manana\b/.test(t)) return mas(2);
   if (/\bmanana\b/.test(t)) return mas(1);
   if (/\beste\s+(fin de semana|finde)\b/.test(t)) return mas(5 - dowMon); // sábado de su semana
-  let m = t.match(/\beste\s+(lunes|martes|miercoles|jueves|viernes|sabado|domingo)\b/);
+  let   m = t.match(/\beste\s+(lunes|martes|miercoles|jueves|viernes|sabado|domingo)\b/);
   if (m) return mas(SEM_LUN[m[1]] - dowMon); // misma semana (si ya pasó, sale pasado)
-  m = t.match(/\bel\s+(lunes|martes|miercoles|jueves|viernes|sabado|domingo)\b/);
+  // "el <día>" = próximo venidero… salvo "hasta el <día>" (fecha FIN de un
+  // rango del cartel: "Ventorrillos hasta el miércoles 23" no es este miércoles).
+  m = t.match(/(?<!hasta )\bel\s+(lunes|martes|miercoles|jueves|viernes|sabado|domingo)\b/);
   if (m) return mas(((SEM_LUN[m[1]] - dowMon + 7) % 7) || 7); // próximo venidero
   m = t.match(/(\d{1,2})\s*de\s*(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|setiembre|octubre|noviembre|diciembre)/);
   if (m) {
@@ -198,6 +237,12 @@ if (fs.existsSync(POSTS_DIR)) {
       if (RE_HORA.test(textoFull)) { score += 1; motivos.push('hora 19-23h'); }
       if (/plaza|parque|recinto/i.test(textoFull)) { score += 1; motivos.push('lugar verbena'); }
       if (RE_ANTI.test(textoFull)) { score -= 4; motivos.push('penalización no-verbena'); }
+      // Un cartel transcrito con fechas y horas ES un programa de actos:
+      // vale por sí solo aunque el texto del post sea pobre ("ya disponible").
+      if (conCartel && /\d{1,2}:\d{2}/.test(textoFull) &&
+          /enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|setiembre|octubre|noviembre|diciembre/i.test(textoFull)) {
+        score += 3; motivos.push('cartel: programa con fechas y horas');
+      }
       const dias = antiguedadDias(p.fecha, d.revisadoEl);
       // Fecha del evento: si el texto la delata y ya pasó, fuera (post de hace
       // 4 días diciendo "esta noche" = evento de hace 4 días).
@@ -219,7 +264,7 @@ if (fs.existsSync(POSTS_DIR)) {
           cuenta: d.cuenta, url: p.url || '', fecha: p.fecha || '',
           dias, fEv: fEv ? dmyDe(fEv) : '', texto: textoFull.slice(0, 800),
           fotos: (p.imagenes || []).slice(0, 4), pdfs: p.pdfs || [],
-          ho, score, motivos, revisadoEl: d.revisadoEl });
+          ho, score, motivos, revisadoEl: d.revisadoEl, cartel: conCartel });
       }
     }
   }
@@ -249,7 +294,11 @@ const vistosIA = new Set();
     }
   } catch { /* sin caché: todo a la IA */ }
   const pendientes = [];
-  for (const e of pre) {
+  // Los carteles transcritos primero: son la señal más rica y el cap de la
+  // IA (120) no debe dejarlos fuera.
+  const ordenPre = [...pre].sort((a, b) =>
+    ((b.cartel ? 1 : 0) - (a.cartel ? 1 : 0)) || (b.score - a.score));
+  for (const e of ordenPre) {
     const hit = cacheIA.get(e.id + '|' + e.hash);
     if (hit) { veredictos.set(e.indice, { ...hit, deCache: true }); iaCacheHits++; e.cacheHit = true; }
     else pendientes.push(e);
@@ -334,6 +383,11 @@ for (const e of pre) {
   });
 }
 candidatas.sort((a, b) => b.score - a.score || a.dias - b.dias);
+// Sin duplicados: dos recortes del mismo hilo (post + comentario con el
+// mismo story_fbid) colisionan en ID; se queda el de mayor score.
+for (let i = candidatas.length - 1; i >= 0; i--) {
+  if (candidatas.findIndex((x) => x.id === candidatas[i].id) !== i) candidatas.splice(i, 1);
+}
 
 // ---------- 2b. Cruce con eventos en BD: cancelaciones y retomadas ----------
 console.log('2b/3 Ciclo de vida…');
@@ -383,6 +437,7 @@ try {
 // si no casa con ninguno, queda como novedosa (posible evento nuevo).
 console.log('2c/3 Cruce con eventos en BD…');
 const cruces = []; // {candidata, evento, accion}
+let futurosBD = []; // eventos presentes/futuros: los reutiliza 2d (cola)
 try {
   // Municipio por cuenta (de /cuentas).
   const muniPorCuenta = new Map();
@@ -402,13 +457,13 @@ try {
   const STOPC = new Set(['de', 'la', 'el', 'las', 'los', 'del', 'en', 'con', 'por', 'una', 'y', 'al', 'gran', 'san', 'santa', 'fiesta', 'fiestas', 'baile', 'verbena']);
   const toksC = (s) => new Set(normD(s).split(' ').filter((w) => w.length > 3 && !STOPC.has(w)));
   const events2 = await (await fetch(`${DB}/events.json`)).json() || {};
-  const futuros = Object.entries(events2).map(([id, v]) => ({ id, ...v }))
+  futurosBD = Object.entries(events2).map(([id, v]) => ({ id, ...v }))
     .filter((e) => (e.dayNum || 0) >= hoyN && (e.estado || 'activo') === 'activo');
 
   for (const c of candidatas) {
     const muniC = muniDeCuenta(c.cuenta);
     const tc = toksC(c.texto);
-    const casan = futuros.filter((e) => {
+    const casan = futurosBD.filter((e) => {
       if (muniC && normD(e.municipio) !== normD(muniC)) return false;
       const eo = (e.orquestas || []).map(alnum).filter(Boolean);
       const co = (c.orquestas || []).map(alnum).filter(Boolean);
@@ -450,10 +505,90 @@ try {
   console.log('Cruce omitido (' + (e.message || e).split('\n')[0] + ')');
 }
 
+// ---------- 2d. Actividad por cuenta (Plan C) + cola priorizada (Plan D) ----------
+// Mide diasUltimoPost por cuenta desde lo extraído, guarda el ritmo en local
+// + Firebase, y deja .cache/fb-cola.json con las orquestas en cartel para que
+// el monitor las ponga primeras en la próxima pasada.
+console.log('2d/3 Actividad y cola…');
+let mdActividad = '';
+try {
+  let conf = [];
+  try { conf = JSON.parse(fs.readFileSync(path.join(ROOT, '.cache', 'fb-cuentas.json'), 'utf8')); } catch {}
+  if (!Array.isArray(conf)) conf = [];
+  const porUrl = new Map(conf.map((c) => [String(c.url || '').replace(/\/$/, ''), c]));
+  const ahora = Date.now();
+  const cambios = [];
+  if (fs.existsSync(POSTS_DIR)) {
+    for (const f of fs.readdirSync(POSTS_DIR).filter((x) => x.endsWith('.json'))) {
+      let d;
+      try { d = JSON.parse(fs.readFileSync(path.join(POSTS_DIR, f), 'utf8')); } catch { continue; }
+      const c = porUrl.get(String(d.cuenta || '').replace(/\/$/, ''));
+      if (!c?.id) continue;
+      const posts = d.posts || [];
+      const rev = Date.parse(d.revisadoEl) || ahora;
+      let mejor = 0;
+      for (const p of posts) {
+        let tp = Date.parse(p.fecha || '');
+        if (!tp) {
+          const dd = antiguedadDias(p.fecha, d.revisadoEl);
+          tp = dd < 900 ? rev - dd * 864e5 : 0;
+        }
+        if (tp > mejor) mejor = tp;
+      }
+      const dias = mejor ? Math.max(0, Math.round((ahora - mejor) / 864e5)) : 999;
+      // Abandonada = +1 año sin publicar. Las comisiones callan fuera de
+      // temporada hasta el año siguiente: eso es "fría", no abandono (el
+      // boost de temporada/pre-fiesta las sigue subiendo en la cola).
+      const ritmo = dias < 7 ? 'caliente' : dias < 30 ? 'templada' : dias < 365 ? 'fria' : 'abandonada';
+      const fallos = posts.length ? 0 : (c.fallosSeguidos || 0) + 1;
+      cambios.push({ id: c.id, patch: {
+        ultimaActividad: mejor || c.ultimaActividad || 0,
+        ritmo: fallos >= 3 ? 'abandonada' : ritmo,
+        fallosSeguidos: fallos, postsVistos: posts.length, updatedAt: ahora } });
+    }
+  }
+  const arr = conf.map((c) => {
+    const ch = cambios.find((x) => x.id === c.id);
+    return ch ? { ...c, ...ch.patch } : c;
+  });
+  try { fs.writeFileSync(path.join(ROOT, '.cache', 'fb-cuentas.json'), JSON.stringify(arr, null, 2)); } catch {}
+  let guardadas = 0;
+  for (const ch of cambios) {
+    try {
+      const r = await fetch(`${DB}/fb_cuentas/${ch.id}.json`, { method: 'PATCH', body: JSON.stringify(ch.patch) });
+      if (r.ok) guardadas++;
+    } catch { /* una cuenta sin red no bloquea la pasada */ }
+  }
+  const enCartel = new Set();
+  for (const e of futurosBD) for (const o of e.orquestas || []) {
+    const n = alnum(o);
+    if (n) enCartel.add(n);
+  }
+  try {
+    fs.writeFileSync(path.join(ROOT, '.cache', 'fb-cola.json'),
+      JSON.stringify({ at: ahora, orquestas: [...enCartel].slice(0, 80) }, null, 2));
+  } catch {}
+  const conRitmo = (r) => arr.filter((c) => c.ritmo === r && c.activa !== false).length;
+  const sinMedir = arr.filter((c) => !c.ritmo && c.activa !== false).length;
+  const porTipo = {};
+  for (const c of arr.filter((c) => c.activa !== false)) {
+    const k = `${c.tipo || 'otro'}/${c.ritmo || 'sin-medir'}`;
+    porTipo[k] = (porTipo[k] || 0) + 1;
+  }
+  mdActividad = `\n## Actividad por cuenta (ritmo medido)\n\n` +
+    `Calientes: ${conRitmo('caliente')} · Templadas: ${conRitmo('templada')} · Frías: ${conRitmo('fria')} · Abandonadas: ${conRitmo('abandonada')} · Sin medir: ${sinMedir}\n\n` +
+    Object.entries(porTipo).sort().map(([k, n]) => `- ${k}: ${n}`).join('\n') + '\n\n' +
+    `Orquestas en cartel para la próxima cola: ${enCartel.size} · Ritmos guardados en Firebase: ${guardadas}/${cambios.length}\n`;
+  console.log(`Actividad: ${cambios.length} medidas, ${guardadas} en Firebase · en cartel: ${enCartel.size}`);
+} catch (e) {
+  console.log('Actividad omitida (' + (e.message || e).split('\n')[0] + ')');
+}
+
 // ---------- 3. Guardado: informe + Firebase ----------
 const hoy = new Date().toISOString().slice(0, 10);
 const informe = path.join(ROOT, '.cache', `fb-revision-${hoy}.md`);
 let md = `# Revisión Facebook ${hoy}\n\nCuentas: ${cuentas} · Posts: ${totalPosts} (reels omitidos: ${reelsOmitidos}, eventos ya pasados: ${eventosPasados}) · Candidatas a verbena: ${candidatas.length}\n\n`;
+if (mdActividad) md += mdActividad;
 if (candidatas.length) {
   md += `## Candidatas (score ≥ 4)\n\n`;
   for (const c of candidatas) {
@@ -488,19 +623,32 @@ console.log(`3/3 Informe: .cache/fb-revision-${hoy}.md (${candidatas.length} can
 
 // Volcado a Firebase por REST (las reglas están abiertas; sin service account
 // no hay Admin SDK, pero el PUT anónimo vale igual para estos nodos).
+// Espejo exacto del listado local: se borran los IDs que ya no están para
+// que la web no muestre fantasmas descartados por la IA o envejecidos.
 try {
-  // A la nube solo lo fresco (post de <=7 días): los hallazgos son presente.
-  const frescas = candidatas.filter((c) => (c.dias ?? 999) <= 7);
-  for (const c of frescas) {
+  for (const c of candidatas) {
     const r = await fetch(`${DB}/fb_candidatos/${c.id}.json`, { method: 'PUT', body: JSON.stringify(c) });
     if (!r.ok) throw new Error(`PUT fb_candidatos: HTTP ${r.status}`);
   }
+  const idsAhora = new Set(candidatas.map((c) => c.id));
+  const previas = Object.keys((await (await fetch(`${DB}/fb_candidatos.json?shallow=true`)).json()) || {});
+  let borradas = 0;
+  for (const id of previas) {
+    if (!idsAhora.has(id)) {
+      const r = await fetch(`${DB}/fb_candidatos/${id}.json`, { method: 'DELETE' });
+      if (r.ok) borradas++;
+    }
+  }
   await fetch(`${DB}/meta/fb_revision.json`, { method: 'PUT',
     body: JSON.stringify({ at: Date.now(), cuentas, posts: totalPosts, candidatas: candidatas.length, cambiosEstado: cambiosEstado.length }) });
-  console.log(`Firebase: ${frescas.length} candidatas frescas + meta/fb_revision ✓`);
+  const frescas = candidatas.filter((c) => (c.dias ?? 999) <= 7).length;
+  console.log(`Firebase: ${candidatas.length} candidatas (${frescas} frescas) + meta/fb_revision ✓${borradas ? ` · ${borradas} obsoletas borradas` : ''}`);
 } catch (e) {
   console.log('Firebase: no se pudo volcar (' + (e.message || e).split('\n')[0] + '). Informe local OK.');
 }
+
+await marcarProgreso({ estado: 'lista', fase: 'lista', fin: Date.now(),
+  cuentas, posts: totalPosts, candidatas: candidatas.length, cuentaActual: '' });
 
 if (!args['sin-extraer']) {
   fs.writeFileSync(STAMP, String(Date.now()));

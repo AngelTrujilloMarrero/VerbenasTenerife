@@ -26,7 +26,10 @@ const TIMEOUT_MS = 90 * 1000;
 const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
 
 const RE_VERBENA = /(gran baile|baile|verbena|verbenazo|tardeo|noche latina|noche en blanco|latinazo|baile de magos|orquesta|fiestas?|festejos|programa de (fiestas|actos)|cartel)/i;
-const VISION_MODEL = process.env.IA_VISION_MODEL || 'nex-agi/nex-n2.5-pro:free';
+// Probado 15-sep-2026 con el programa de Las Eras: ling transcribe el cartel
+// entero; nex-n2.5-pro devolvía vacío/timeout y gemma-4 429. Se puede forzar
+// otro con IA_VISION_MODEL en el .env.
+const VISION_MODEL = process.env.IA_VISION_MODEL || 'inclusionai/ling-3.0-flash-vl:free';
 
 function envLocal(k) {
   if (process.env[k]) return process.env[k].trim();

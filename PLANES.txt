@@ -145,3 +145,83 @@ VIGILANCIA ESPECIAL: orquestas con eventos presentes/futuros en BD
   (motivos += "confirmado por la orquesta", score +1).
 - El informe trae seccion propia "Orquestas en cartel vigiladas" con
   estado por orquesta: sin novedad / modificado / cancelado.
+
+MVP PRIORIDAD 15-sep-2026 (implementado, verificado):
+- monitor --todas ordena: 🎺 en-cartel (200) > 📅 temporada/pre-fiesta
+  (100, calendario-fiestas.json por token de municipio) > 🔥 ritmo
+  (30/15/5) > tipo (orq/com 10, ayto 5). Sin medir entra como caliente.
+- --nivel=auto (todo menos abandonadas) | todo | caliente | templada |
+  fria. --solo-orden imprime la cola (243 en 0.2s) sin abrir Chromium.
+- revision-auto 2d: mide diasUltimoPost por cuenta, guarda ritmo en
+  .cache/fb-cuentas.json + Firebase fb_cuentas (PATCH), escribe
+  .cache/fb-cola.json con orquestas en cartel (caduca 14d). Informe con
+  tabla de actividad por tipo/ritmo. /cuentas muestra badge de ritmo.
+- Ritmo pleno desde la 2ª pasada: hoy solo 15/243 medidas (las de la
+  caché); el resto se mide en la pasada completa de mañana 08:00.
+
+FORZADO DESDE /lectura 15-sep-2026 (verificado):
+- POST /api/fb-revisar {modo: completa|clasificar} lanza
+  revision-auto.mjs --forzar en detached con log a
+  /tmp/verbenas-revision.log. Solo Mac local (501 fuera), 409 si ya hay
+  pasada en curso (salvo forzar:true). /api/fb-progreso añade puedeForzar.
+- /lectura: tarjeta con ▶ Forzar completa (~1h, con confirm) y
+  ↻ Reclasificar (~1min); se oculta fuera del Mac y se desactiva en curso.
+  Probado: lanzar → 409 en doble → en-curso/clasificando en vivo → reposo.
+
+ESCALA DE ACTIVIDAD 15-sep-2026 (verificado):
+- Nivel auto = solo no abandonadas (lo anuncia: "Omitidas por abandono: N");
+  --nivel=todo las incluye. Filtro por nivel probado (templada→0, todo→243).
+- 2d guarda postsVistos por cuenta (local + Firebase). /lectura trae tarjeta
+  "Escala de actividad" (conteos por ritmo + top 8 más/menos activas desde
+  /api/fb-cuentas, vale en Vercel). /cuentas muestra "hace Xd · N posts".
+- Medidas 63/243 (la caché creció sola a 63); el resto, mañana 08:00.
+
+ALCANCE EN /lectura 15-sep-2026 (verificado parcial):
+- Tarjeta Lanzar con selects Alcance (no abandonadas/calientes/templadas/
+  frías/todas) + Posts (3/5/10). API valida y reenvía; revision-auto los
+  pasa al monitor (--nivel/--posts). Auto ya omite abandonadas y lo anuncia
+  (hoy: 8 fuera, 235 a revisar).
+- Endurecido por carrera real: progreso atómico (tmp+rename) en monitor,
+  revision y API; la API no pisa el latido de una pasada viva; el monitor
+  reafirma fase extrayendo en cada cuenta (una pre-escritura 'iniciando'
+  había dejado la fase pegajosa; curada en vivo a 82/243).
+- Pendiente: prueba viva de nivel/posts no-defecto (la pasada en curso usa
+  valores por defecto; el parseo está probado con --solo-orden).
+
+REGLA ABANDONO 1 AÑO 15-sep-2026 (aplicada):
+- Abandonada = +365d sin publicar (antes 90d); fría 30-365d. Las comisiones
+  que callan fuera de temporada quedan en fría y el boost 📅 las rescata.
+- Pasada completa 243/243 (721 posts, 46 candidatas) + reclasificación:
+  140 calientes · 46 templadas · 55 frías · 2 abandonadas · 0 sin medir.
+- Abandonadas finales: "Joel Tena Luis" y "Santa Cruz de Tenerife" (ambas
+  tipo otro, 0 posts en 2 pasadas). Pendiente: decidir pausa con usuario.
+- Decidido 15-sep-2026: PAUSADAS (activa=false en local + Firebase).
+  241 activas / 2 pausadas. Verificado por /api/fb-cuentas.
+
+IA OPENROUTER 15-sep-2026 (verificado con llamadas reales):
+- OPENROUTER_API_KEY en .env (gitignored). Clave válida (auth 200).
+- 20 modelos :free, 10 con visión. Texto: liquid/lfm-2.5-2.6b:free sigue
+  free (2/2 veredictos OK). Visión: nex-n2.5-pro vacío/timeout, gemma-4 429;
+  inclusionai/ling-3.0-flash-vl:free transcribe carteles enteros (probado
+  con el programa de Las Eras 2026) → nuevo default en ocr-fb.mjs.
+- Pasada --sin-extraer con IA: filtra bien (Verbena Cósmica y actos
+  religiosos → irrelevante; Level UP Los Realejos 19-09 → relevante).
+  Hoy: 721 posts (193 reels + 195 pasados fuera) → 43 candidatas.
+
+FANTASMAS EN LA WEB 15-sep-2026 (arreglado + limpio):
+- La revisión hacía PUT por ID pero nunca borraba: Firebase acumulaba
+  candidatas descartadas por la IA (46) mientras el local decía 43/21.
+  La web (lee Firebase primero) mostraba obsoletas.
+- Ahora el volcado es espejo exacto (PUT + DELETE de IDs fuera de la
+  pasada) y se dedupica por ID (post + comentario del mismo hilo
+  colisionaban: 3 dups). Limpieza puntual: 26 borradas, 40 únicas.
+- Próximas pasadas se auto-sincronizan.
+
+IMAGEN→CANDIDATA (Las Eras) 15-sep-2026 (verificado):
+- El programa de Las Eras no llegaba: sin OCR (cap agotado antes) y score 2
+  del texto pobre. Ahora: cartel transcrito con fechas+horas suma +3 y los
+  posts con cartel van primeros al cupo de IA.
+- Fiestas Las Eras ya es candidata (score 5, evento 23-09, cartel visible).
+- Bug fecha: "hasta el miércoles 23" se leía como "este miércoles" (16-09);
+  el "el <día>" ya no casa tras "hasta". Con cuota IA (agotada hoy, 50/día)
+  dará el 20-09 exacto.

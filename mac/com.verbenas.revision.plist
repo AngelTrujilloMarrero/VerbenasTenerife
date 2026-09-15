@@ -11,10 +11,27 @@
   </array>
   <key>WorkingDirectory</key>
   <string>/Users/atrujimar/Documents/WEBS/VerbenasTenerife</string>
+  <!-- PATH explícito: launchd no trae homebrew y los hijos del script
+       (spawnSync) morían con ENOENT = "código null" (15-sep-2026).
+       El script además usa process.execPath como cinturón y tirantes. -->
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+  </dict>
   <!-- Al iniciar sesión: si la última revisión tiene menos de 20h, el propio
        script termina sin hacer nada (ver STAMP en scripts/revision-auto.mjs). -->
   <key>RunAtLoad</key>
   <true/>
+  <!-- Además, una pasada diaria a las 08:00 aunque el Mac no se reinicie.
+       El guardado de 20h del script evita duplicar si ya se revisó al arrancar. -->
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Hour</key>
+    <integer>8</integer>
+    <key>Minute</key>
+    <integer>0</integer>
+  </dict>
   <key>ThrottleInterval</key>
   <integer>30</integer>
   <key>StandardOutPath</key>

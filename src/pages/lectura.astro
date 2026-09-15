@@ -1,0 +1,262 @@
+---
+export const prerender = false;
+// Panel del proceso de lectura de Facebook: estado en vivo, progreso por
+// cuenta, última revisión, próxima pasada e informes. Datos de
+// /api/fb-progreso (local .cache o Firebase meta/fb_progreso en Vercel).
+---
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Lectura Facebook — Verbenas Tenerife</title>
+  <style is:global>
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: system-ui, -apple-system, sans-serif; background: #111827; color: #fff; }
+    a { color: #93c5fd; }
+    .cabecera { background: #2563eb; padding: 12px 8px; text-align: center; }
+    @media (min-width: 768px) { .cabecera { background: linear-gradient(to right, #2563eb, #9333ea); } }
+    .cabecera h1 { margin: 0; font-size: 1.4rem; font-weight: 800; }
+    .cabecera p { margin: 4px 0 0; color: #dbeafe; font-size: 13px; }
+    .top-nav { text-align: center; padding: 10px; font-size: 14px; }
+    .wrap { max-width: 860px; margin: 0 auto; padding: 0 16px 32px; }
+    .card { background: #1f2937; border: 1px solid #374151; border-radius: 12px; padding: 16px; margin: 12px 0; }
+    .card h2 { margin: 0 0 12px; font-size: 16px; color: #facc15; }
+    .badge { display: inline-block; padding: 4px 12px; border-radius: 999px; font-size: 14px; font-weight: 800; }
+    .badge.curso { background: rgba(6,78,59,.5); color: #6ee7b7; animation: pulso 1.6s infinite; }
+    .badge.reposo { background: #374151; color: #d1d5db; }
+    .badge.detenida { background: rgba(127,29,29,.5); color: #fca5a5; }
+    @keyframes pulso { 50% { opacity: .55; } }
+    .barra-ext { background: #374151; border-radius: 999px; height: 12px; overflow: hidden; margin: 10px 0 4px; }
+    .barra-int { background: linear-gradient(to right, #3b82f6, #a855f7); height: 100%; width: 0%; transition: width .5s; }
+    .fases { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+    .fase { border-radius: 999px; padding: 3px 12px; font-size: 12px; background: #111827; color: #6b7280; border: 1px solid #374151; }
+    .fase.hecha { background: rgba(6,78,59,.5); color: #6ee7b7; border-color: rgba(16,185,129,.3); }
+    .fase.ahora { background: rgba(30,58,138,.6); color: #bfdbfe; border-color: rgba(59,130,246,.5); }
+    .grid2 { display: grid; gap: 12px; }
+    @media (min-width: 700px) { .grid2 { grid-template-columns: 1fr 1fr; } }
+    .dato { font-size: 14px; margin: 4px 0; }
+    .dato b { color: #fff; }
+    .muted { color: #9ca3af; font-size: 13px; }
+    pre.log { background: #030712; border: 1px solid #374151; border-radius: 8px; padding: 12px;
+      font-size: 12px; line-height: 1.5; overflow-x: auto; white-space: pre-wrap; color: #d1d5db; }
+    ul.informes { margin: 0; padding-left: 20px; font-size: 14px; }
+    .btn { display: inline-block; padding: 8px 16px; border-radius: 8px; font-size: 14px; font-weight: 700;
+      background: rgba(30,58,138,.5); color: #bfdbfe; border: 1px solid rgba(59,130,246,.3); cursor: pointer; }
+    .btn:disabled { opacity: .5; cursor: default; }
+    label.mini { display: block; font-size: 11px; color: #9ca3af; margin-bottom: 4px; text-transform: uppercase; letter-spacing: .04em; }
+    select.sel { background: #111827; color: #fff; border: 1px solid #374151; border-radius: 8px; padding: 8px 12px; font-size: 14px; }
+  </style>
+</head>
+<body>
+  <header class="cabecera">
+    <h1>📡 Lectura de Facebook</h1>
+    <p>Proceso de revisión de cuentas en vivo · se actualiza solo cada 15 s</p>
+  </header>
+  <nav class="top-nav"><a href="/">← Verbenas</a> · <a href="/candidatas">🔎 Candidatas</a> · <a href="/cuentas">📘 Cuentas</a></nav>
+
+  <div class="wrap">
+    <section class="card">
+      <h2>Estado <span id="badge"></span></h2>
+      <div id="progreso">Cargando…</div>
+    </section>
+
+    <section class="card" id="card-lanzar">
+      <h2>Lanzar revisión</h2>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
+        <div>
+          <label class="mini" for="sel-nivel">Alcance</label>
+          <select class="sel" id="sel-nivel">
+            <option value="auto" selected>No abandonadas</option>
+            <option value="caliente">Solo calientes</option>
+            <option value="templada">Solo templadas</option>
+            <option value="fria">Solo frías</option>
+            <option value="todo">Todas (incl. abandonadas)</option>
+          </select>
+        </div>
+        <div>
+          <label class="mini" for="sel-posts">Posts/cuenta</label>
+          <select class="sel" id="sel-posts">
+            <option value="3" selected>3</option>
+            <option value="5">5</option>
+            <option value="10">10</option>
+          </select>
+        </div>
+        <button class="btn" id="btn-forzar">▶ Forzar lectura</button>
+        <button class="btn" id="btn-clasificar">↻ Reclasificar sin extraer</button>
+      </div>
+      <p class="muted" id="msg-lanzar" style="margin-bottom:0">La lectura abre el navegador (completa ~1 h). La reclasificación usa la caché (~1 min).</p>
+    </section>
+
+    <div class="grid2">
+      <section class="card">
+        <h2>Última revisión</h2>
+        <div id="ultima" class="muted">Cargando…</div>
+      </section>
+      <section class="card">
+        <h2>Próxima pasada</h2>
+        <div id="proxima" class="muted">Cargando…</div>
+      </section>
+    </div>
+
+    <section class="card">
+      <h2>Escala de actividad</h2>
+      <div id="actividad" class="muted">Cargando…</div>
+    </section>
+
+    <section class="card">
+      <h2>Informes</h2>
+      <div id="informes" class="muted">Cargando…</div>
+      <p class="muted" style="margin-bottom:0">Detalle de hallazgos en <a href="/candidatas">🔎 Candidatas</a>.</p>
+    </section>
+
+    <section class="card">
+      <h2>Registro <button class="btn" id="recargar" style="margin-left:8px">↻ Actualizar</button></h2>
+      <pre class="log" id="log">Cargando…</pre>
+      <p class="muted" id="fuente" style="margin-bottom:0"></p>
+    </section>
+  </div>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) =>
+      ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const fmtFecha = (iso) => {
+      if (!iso) return '—';
+      try { return new Date(iso).toLocaleString('es-ES'); } catch { return iso; }
+    };
+    const FASES = [
+      ['extrayendo', '1 · Extrayendo posts'],
+      ['ocr', '2 · OCR carteles'],
+      ['clasificando', '3 · Clasificando con IA'],
+      ['lista', '4 · Guardado']
+    ];
+    const ordenFase = (f) => { const i = FASES.findIndex(([k]) => k === f); return i < 0 ? 0 : i; };
+
+    async function lanzar(modo) {
+      const msg = $('msg-lanzar');
+      const nivel = $('sel-nivel').value;
+      const posts = Number($('sel-posts').value);
+      msg.textContent = 'Lanzando…';
+      try {
+        const r = await fetch('/api/fb-revisar', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ modo, nivel, posts })
+        });
+        const d = await r.json();
+        if (!d.ok) throw new Error(d.error || 'fallo');
+        msg.textContent = `✅ ${d.nota || 'En marcha.'} (alcance ${d.nivel || '—'}${d.posts ? `, ${d.posts} posts` : ''} · pid ${d.pid ?? '?'})`;
+      } catch (e) {
+        msg.textContent = '❌ ' + e.message;
+      }
+      cargar();
+    }
+    $('btn-forzar').addEventListener('click', () => {
+      const alcance = $('sel-nivel').selectedOptions[0].textContent;
+      if (confirm(`¿Forzar lectura (${alcance}, ${$('sel-posts').value} posts/cuenta)? Abrirá el navegador y puede tardar ~1 h.`)) lanzar('completa');
+    });
+    $('btn-clasificar').addEventListener('click', () => lanzar('clasificar'));
+
+    const RITMO_EMOJI = { caliente: '🔥', templada: '🌤️', fria: '❄️', abandonada: '💤' };
+    const haceDias = (ms) => ms ? Math.max(0, Math.round((Date.now() - ms) / 864e5)) : null;
+
+    // Escala de actividad desde /api/fb-cuentas (vale en local y en Vercel).
+    async function cargarActividad() {
+      try {
+        const r = await fetch('/api/fb-cuentas');
+        const d = await r.json();
+        const cs = (d.cuentas || []).filter((c) => c.activa !== false);
+        const conteo = {};
+        for (const c of cs) conteo[c.ritmo || 'sin-medir'] = (conteo[c.ritmo || 'sin-medir'] || 0) + 1;
+        const medidas = cs.filter((c) => c.ultimaActividad).sort((a, b) => b.ultimaActividad - a.ultimaActividad);
+        const fila = (c) => {
+          const hd = haceDias(c.ultimaActividad);
+          return `<div class="dato">${RITMO_EMOJI[c.ritmo] || '▫️'} <b>${esc(c.nombre)}</b> ` +
+            `<span class="muted">hace ${hd === 0 ? 'hoy' : hd + 'd'} · ${esc(c.tipo || '')}${c.postsVistos != null ? ` · ${c.postsVistos} posts` : ''}</span></div>`;
+        };
+        const top = medidas.slice(0, 8).map(fila).join('') || '<span class="muted">Sin medir aún.</span>';
+        const cola = [...medidas].reverse().slice(0, 8).map(fila).join('') || '<span class="muted">Sin medir aún.</span>';
+        $('actividad').innerHTML = `
+          <div class="dato">🔥 ${conteo.caliente || 0} · 🌤️ ${conteo.templada || 0} · ❄️ ${conteo.fria || 0} · 💤 ${conteo.abandonada || 0} · ▫️ ${conteo['sin-medir'] || 0} sin medir (${cs.length} activas)</div>
+          <div class="grid2" style="margin-top:8px">
+            <div><div class="dato"><b>⬆ Más activas</b></div>${top}</div>
+            <div><div class="dato"><b>⬇ Menos activas</b></div>${cola}</div>
+          </div>`;
+      } catch (e) {
+        $('actividad').innerHTML = `<span class="muted">Error: ${esc(e.message)}</span>`;
+      }
+    }
+
+    async function cargar() {
+      let d;
+      try {
+        const r = await fetch('/api/fb-progreso');
+        d = await r.json();
+        if (!d.ok) throw new Error(d.error || 'fallo');
+      } catch (e) {
+        $('progreso').innerHTML = `<span class="muted">Error: ${esc(e.message)}</span>`;
+        return;
+      }
+      // Estado
+      const b = d.estado === 'en-curso' ? '<span class="badge curso">🟢 EN CURSO</span>'
+        : d.estado === 'detenida' ? '<span class="badge detenida">🟠 POSIBLEMENTE DETENIDA</span>'
+        : '<span class="badge reposo">⚪ EN REPOSO</span>';
+      $('badge').innerHTML = ' ' + b;
+      // Lanzar: solo existe en el Mac local; apagado si ya hay pasada en curso.
+      if (d.puedeForzar === false) {
+        $('card-lanzar').style.display = 'none';
+      } else {
+        $('card-lanzar').style.display = '';
+        const ocupado = d.estado === 'en-curso';
+        for (const id of ['btn-forzar', 'btn-clasificar', 'sel-nivel', 'sel-posts']) {
+          $(id).disabled = ocupado;
+          $(id).style.opacity = ocupado ? '.5' : '1';
+        }
+      }
+      // Progreso
+      const p = d.progreso;
+      if (d.estado === 'en-curso' || (p && p.fase && p.fase !== 'lista')) {
+        const hechas = p?.cuentasHechas ?? 0, total = p?.cuentasTotal ?? 0;
+        const pct = total > 0 ? Math.round((hechas / total) * 100) : 0;
+        const idx = ordenFase(p?.fase);
+        $('progreso').innerHTML = `
+          <div class="barra-ext"><div class="barra-int" style="width:${pct}%"></div></div>
+          <div class="dato"><b>${hechas}/${total || '—'}</b> cuentas (${pct}%)</div>
+          ${p?.cuentaActual ? `<div class="dato muted">Ahora: ${esc(String(p.cuentaActual).split('/').filter(Boolean).pop() || p.cuentaActual)}</div>` : ''}
+          <div class="fases">${FASES.map(([k, l], i) =>
+            `<span class="fase ${i < idx ? 'hecha' : i === idx ? 'ahora' : ''}">${i < idx ? '✓ ' : ''}${l}</span>`).join('')}</div>
+          <div class="dato muted">Latido: ${fmtFecha(p?.actualizadoEl)}</div>`;
+      } else {
+        const u = d.ultima;
+        $('progreso').innerHTML = `<span class="muted">Sin revisión en marcha.</span>` +
+          (u ? ` <span class="muted">Última: ${fmtFecha(u.at)} · ${u.cuentas ?? '?'} cuentas · ${u.posts ?? '?'} posts · ${u.candidatas ?? '?'} candidatas.</span>` : '');
+      }
+      // Última
+      const u = d.ultima;
+      $('ultima').innerHTML = u ? `
+        <div class="dato">📅 <b>${fmtFecha(u.at)}</b></div>
+        <div class="dato">Cuentas: <b>${u.cuentas ?? '—'}</b> · Posts: <b>${u.posts ?? '—'}</b> · Candidatas: <b>${u.candidatas ?? '—'}</b></div>
+        <div class="dato muted">Fuente: ${esc(u.fuente === 'db' ? 'Firebase' : 'revisión local')}</div>`
+        : 'Aún no hay revisión terminada.';
+      // Próxima
+      const nx = d.proxima || {};
+      $('proxima').innerHTML = `
+        <div class="dato">${nx.listaParaRevisar ? '✅ <b>Lista para revisar</b>' : `⏳ No antes de <b>${fmtFecha(nx.noAntesDe)}</b>`}</div>
+        <div class="dato muted">${esc(nx.plan || '')}</div>
+        ${d.cache?.cuentasConfig ? `<div class="dato muted">Cuentas configuradas: ${d.cache.cuentasConfig} · con posts en caché: ${d.cache.ficherosPosts ?? '—'}</div>` : ''}`;
+      // Informes
+      $('informes').innerHTML = (d.informes && d.informes.length)
+        ? `<ul class="informes">${d.informes.map((f) => `<li>${esc(f)}</li>`).join('')}</ul>`
+        : '<span class="muted">Sin informes todavía.</span>';
+      // Log
+      $('log').textContent = (d.log && d.log.length) ? d.log.join('\n') : 'Registro no disponible en este servidor (solo Mac local).';
+      const f = d.progreso?.fuente === 'db' ? 'Firebase' : d.progreso?.fuente === 'local' ? 'Mac local' : '—';
+      $('fuente').textContent = `Progreso vía: ${f} · actualizado ${new Date().toLocaleTimeString('es-ES')}`;
+    }
+    $('recargar').addEventListener('click', cargar);
+    cargar();
+    cargarActividad();
+    setInterval(cargar, 15000);
+    setInterval(cargarActividad, 60000);
+  </script>
+</body>
+</html>
