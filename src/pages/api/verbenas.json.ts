@@ -1,4 +1,5 @@
 import type { APIRoute } from 'astro';
+import { claveDe } from '../../lib/dedup.js';
 import { esFutura, hoyDMY } from '../../lib/fechas.js';
 import { purgarAntiguas, volcarVerbenas } from '../../lib/db.js';
 import { FUENTES, obtenerVerbenas } from '../../lib/verbenas.js';
@@ -11,7 +12,10 @@ export const GET: APIRoute = async ({ url }) => {
   const filtro = url.searchParams.get('filtro') || 'futuras';
   try {
     const todas = await obtenerVerbenas(municipio);
-    const conFlag = todas.map((v) => ({ ...v, futura: esFutura(v.day) }));
+    // Clave canónica por evento para que el cliente fusione por clave además
+    // de por ID (los IDs viejos de la BD no coinciden con los nuevos).
+    const conFlag = todas.map((v) => ({ ...v, futura: esFutura(v.day),
+      clave: claveDe(v.municipio, v.day, v.titulo, v.orquestas) }));
         // Volcado a RTDB en 2º plano (upsert por ID: solo escribe lo nuevo o
     // cambiado; purga todo lo anterior a hoy: la BD es solo presente+futuro).
     // La fuente se resuelve por hostname de agenda (Drive ambiguo -> por

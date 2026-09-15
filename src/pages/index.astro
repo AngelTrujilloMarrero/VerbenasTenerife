@@ -431,6 +431,10 @@ const fbOn = !!(fbConfig.apiKey && fbConfig.databaseURL);
       render();
     }
 
+    // Turno de carga: si la BD llega tarde tras el timeout, sus pintados se
+    // ignoran para no pisar al modo en vivo ya en marcha.
+    let turnoCarga = 0;
+
     async function main() {
       // ?vivo=1 (botón Recargar todo): salta la BD y raspa en vivo; al pasar
       // por la API se re-vuelca a Firebase y se refresca lo obsoleto.
@@ -441,10 +445,23 @@ const fbOn = !!(fbConfig.apiKey && fbConfig.databaseURL);
         await cargaEnVivo();
         return;
       }
-      // Vía base de datos (una lectura); si falla o está vacía, en vivo.
+      // Vía base de datos (una lectura); si tarda (CDN esm.sh lento, BD
+      // caída) no se espera eternamente: a los 12s se pasa a en vivo para
+      // que los chips progresen municipio a municipio en vez de salir todo
+      // de golpe tras una espera larga.
+      texto.textContent = 'Conectando con la base de datos…';
       if (fbOn) {
-        try { await cargaDesdeBD(); return; }
-        catch (e) { console.warn('BD no disponible, en vivo:', e?.message || e); }
+        const t = ++turnoCarga;
+        try {
+          await Promise.race([
+            cargaDesdeBD(t),
+            new Promise((_, rej) => setTimeout(() => rej(new Error('timeout BD')), 12000))
+          ]);
+          return;
+        } catch (e) {
+          console.warn('BD no disponible o lenta, en vivo:', e?.message || e);
+          turnoCarga++; // invalida la BD tardía si llega después
+        }
       }
       await cargaEnVivo();
     }
@@ -458,7 +475,7 @@ const fbOn = !!(fbConfig.apiKey && fbConfig.databaseURL);
       return d === 1 ? 'ayer' : `hace ${d} días`;
     };
 
-    async function cargaDesdeBD() {
+    async function cargaDesdeBD(t) {
       const [{ initializeApp }, { getDatabase, ref, get }] = await Promise.all([
         import('firebase/app'), import('firebase/database')
       ]);
@@ -466,6 +483,7 @@ const fbOn = !!(fbConfig.apiKey && fbConfig.databaseURL);
       const [ev, me, fb] = await Promise.all([
         get(ref(db, 'events')), get(ref(db, 'meta')), get(ref(db, 'fb_candidatos')).catch(() => null)
       ]);
+      if (t !== turnoCarga) return; // llegó tarde: manda el modo en vivo
       const datos = ev.val() || null;
       if (!datos || !Object.keys(datos).length) throw new Error('BD vacía');
       const meta = me.val() || {};
@@ -503,13 +521,14 @@ const fbOn = !!(fbConfig.apiKey && fbConfig.databaseURL);
         .filter((c) => ((c.dias ?? 999) <= 7))
         .sort((a, b) => (b.score || 0) - (a.score || 0));
       renderBD(meta, mapa.size, fbLista);
+      if (t !== turnoCarga) return;
       // Como antes: tras pintar la BD, revalida cada fuente en vivo una a una
       // (chips progresivos) y fusiona solo lo nuevo. Así la primera pintura
       // es instantánea y la frescura llega municipio a municipio.
-      refrescarEnVivo();
+      refrescarEnVivo(t);
     }
 
-    async function refrescarEnVivo() {
+    async function refrescarEnVivo(t) {
       const vistos = new Set(todas.map((v) => v.id));
       let nuevas = 0;
       texto.textContent = `Base de datos mostrada · actualizando en vivo…`;
