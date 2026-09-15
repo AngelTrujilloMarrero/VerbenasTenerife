@@ -236,3 +236,23 @@ PROGRAMAS→EVENTOS 15-sep-2026 (verificado, idempotente):
   clave en local tras UNA descarga (y se borró el nodo basura events/error).
 - Lotes IA vacíos ya no marcan vistos (un 200 vacío tumbaba de 44 a 10
   candidatas); sin veredictos decide la regex. Hora: solo tarde (19-23h).
+
+VERBENAS SUELTAS DEL CARTEL 15-sep-2026 (verificado, automático):
+- Causa de no-subida: slice OCR a 3000 cortaba "Sabro|sa" (orquestaEn=0) y
+  no existía partición por actos (1 post → 1 evento genérico). Nada manual.
+- ocr-fb slice 3000→8000 + backfill desde caché; nuevo scripts/actos-cartel.mjs
+  (secciones por día, weekday sin número hacia adelante, alias viemes, líneas
+  de verbena+hora, orquesta estricta en la línea). 2e crea 1 evento por acto
+  (aunque el cruce casara el contenedor); sin actos, genérico como antes.
+- Las Eras: 5 actos → 4 eventos 25-09 (Sabrosa+Wamampy, Tropin+Acapulco,
+  Baile Pamela, Saoco; el 5º fusionó por clave con el 1º). Contenedor 23-09
+  con fecha del bug 'hasta' borrado; portada 20-09 se queda.
+- Bailes mal (hora): extraerActos solo cogía hora de tarde; ahora la real
+  del cartel (17:00≠23:00 también distingue eventos). Las 5 verbenas de Las
+  Eras en DB con día+hora (Pamela 15:00, fin de fiestas 17:00).
+- Fechas refinadas (acentos): split insensible a acentos (Sábado/Miércoles),
+  alias dominical/ubado, guarda 'hasta', mes por ventana. Las Eras: 25, 26,
+  27, 30-09 y 03-10 (antes todo el 25).
+- Anti-dups 2e: mapa (clave,hora), sustitución determinista (promovido hoy >
+  menor ID, sin flip-flop). Limpios los gemelos de pruebas. Resta 1 dup
+  previo de adaptadores (Wamampy 17-09 lagenda/ocr: Plan B).

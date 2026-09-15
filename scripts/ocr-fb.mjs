@@ -172,7 +172,9 @@ export async function ocrFotosPosts({ solo = '', maxTotal = MAX_TOTAL, maxVision
         const fp = path.join(POSTS_DIR, c.fichero);
         const d = JSON.parse(fs.readFileSync(fp, 'utf8'));
         if (d.posts && d.posts[c.idx]) {
-          d.posts[c.idx].ocrTexto = textos.join('\n---\n').slice(0, 3000);
+          // Slice amplio (8000): un corte a mitad de palabra ("Sabro|sa")
+          // rompe la detección de orquestas en revision-auto.
+          d.posts[c.idx].ocrTexto = textos.join('\n---\n').slice(0, 8000);
           d.posts[c.idx].ocrAt = new Date().toISOString();
           fs.writeFileSync(fp, JSON.stringify(d, null, 1));
           postsOk++;

@@ -10,6 +10,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { verificarConIA } from './ia-clasificar.mjs';
+import { extraerActos } from './actos-cartel.mjs';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const args = Object.fromEntries(process.argv.slice(2).map((a) => {
@@ -643,14 +644,81 @@ try {
   try { todosEv = (await (await fetch(`${DB}/events.json`)).json()) || {}; } catch {}
   const porClave = new Map();
   for (const [id, e] of Object.entries(todosEv)) {
-    if (e && e.clave) porClave.set(e.clave, { id, e });
+    // Clave base: primer nodo (los hermanos de hora conviven con sufijo).
+    if (e && e.clave && !porClave.has(e.clave)) porClave.set(e.clave, { id, e });
+    if (e && e.clave && e.hora) porClave.set(e.clave + '|' + e.hora, { id, e });
   }
   const promovidos = [];
+  // Cartel completo por URL de post (el texto de la candidata va recortado;
+  // para partir en actos hace falta el OCR entero).
+  const cartelPorUrl = new Map();
+  try {
+    for (const f of fs.readdirSync(POSTS_DIR).filter((x) => x.endsWith('.json'))) {
+      let dd;
+      try { dd = JSON.parse(fs.readFileSync(path.join(POSTS_DIR, f), 'utf8')); } catch { continue; }
+      for (const p of dd.posts || []) {
+        if (p.url && p.ocrTexto) cartelPorUrl.set(p.url, (p.texto || '') + '\n[CARTEL] ' + p.ocrTexto);
+      }
+    }
+  } catch {}
+  const idDeClave = (clave) => {
+    let h1 = 0xdeadbeef;
+    for (let i = 0; i < clave.length; i++) { h1 = Math.imul(h1 ^ clave.charCodeAt(i), 2654435761); }
+    return 'fb-' + (h1 >>> 0).toString(36);
+  };
+  // Sube un evento (nuevo o fusión por clave). Misma clave + distinta hora
+  // (ambas informadas) = verbenas distintas (tarde y noche con la misma
+  // orquesta): el ID lleva la hora y no se fusionan. Devuelve {accion,...}.
+  async function subirEvento({ titulo, day, hora, lugar, orquestas, tipo, c, muni, marca, motivosBase }) {
+    const [dd, mm, yy] = day.split('-').map(Number);
+    const dayNum = yy * 10000 + mm * 100 + dd;
+    const clave = claveProg(muni, day, titulo, orquestas);
+    // 1) Gemelo exacto (misma hora) 2) base compatible (misma/ninguna hora).
+    // Conflicto de hora confirmada → variante con ID propio (no pisa al base).
+    let mapKey = clave;
+    let hit = (hora && porClave.get(clave + '|' + hora)) || null;
+    if (hit) {
+      mapKey = clave + '|' + hora;
+    } else {
+      const base = porClave.get(clave);
+      if (base && (!hora || !base.e.hora || base.e.hora === hora)) {
+        hit = base;
+      } else if (base && hora) {
+        mapKey = clave + '|' + hora; // variante: hit null → crear
+      }
+    }
+    const id = idDeClave(mapKey);
+    if (hit) {
+      const orqU = [...(hit.e.orquestas || [])];
+      for (const o of orquestas) {
+        if (!orqU.some((x) => alnumL(x) === alnumL(o))) orqU.push(o);
+      }
+      await fetch(`${DB}/events/${hit.id}.json`, { method: 'PATCH', body: JSON.stringify({
+        orquestas: orqU,
+        motivos: [...new Set([...(hit.e.motivos || []), marca])],
+        fuentes: [...new Set([...(hit.e.fuentes || [hit.e.fuente].filter(Boolean)), 'facebook'])],
+        score: Math.max(hit.e.score || 0, c.score || 0),
+        ...(!hit.e.hora && hora ? { hora } : {}),
+        actualizadoAt: Date.now() }) });
+      porClave.set(mapKey, { id: hit.id, e: { ...hit.e, orquestas: orqU } });
+      return { accion: 'enriquecido', id: hit.id, titulo: hit.e.titulo || titulo, day: hit.e.day || day, hora: hit.e.hora || '', prog: c.id };
+    }
+    const doc = {
+      id, titulo, day, dayNum, hora: hora || '', municipio: muni,
+      lugar: (lugar || '').slice(0, 80), orquestas,
+      tipo, url: c.url || '', score: c.score || 4,
+      motivos: [...new Set([marca, ...motivosBase])],
+      fuente: 'facebook', fuentes: ['facebook'],
+      clave, estado: 'activo', fotos: c.fotos || [],
+      programaDe: c.id, actualizadoAt: Date.now()
+    };
+    const r = await fetch(`${DB}/events/${id}.json`, { method: 'PUT', body: JSON.stringify(doc) });
+    if (!r.ok) throw new Error(`PUT events/${id}: HTTP ${r.status}`);
+    porClave.set(mapKey, { id, e: doc });
+    return { accion: 'nuevo', id, titulo, day, hora: hora || '', prog: c.id };
+  }
+  const limpio = (s) => String(s || '').replace(/[|*_#>`↓]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 90);
   for (const c of candidatas) {
-    if (accionPor.get(c.id) !== 'novedoso' || c.eventoId) continue;
-    if (!c.eventoDay) continue;
-    const [ed, em, ey] = c.eventoDay.split('-').map(Number);
-    if (!ey || new Date(ey, em - 1, ed) < hoy0()) continue;
     const muni = muniDe(c.cuenta);
     if (!muni) continue;
     const mot = (c.motivos || []).join(' ');
@@ -658,62 +726,82 @@ try {
     const iaFav = c.ia && c.ia.relevante !== false;
     const conChicha = /verbena|baile|orquesta/i.test(c.texto);
     if (!iaFav && !(c.score >= 4 && (tieneCartel || (c.orquestas || []).length || conChicha))) continue;
-    // Título: primera línea con sustancia del cartel; si no, de la cuenta.
+    const marca = `programa en Facebook (${String(c.cuenta).split('/').filter(Boolean).pop()})`;
+    const place = placeDe(c.cuenta);
+    // 1) Actos sueltos del cartel (cada verbena con su día): un evento por
+    // acto. Vale aunque el cruce casara con el contenedor genérico: la clave
+    // evita duplicar si el acto ya existe de otra fuente.
+    const full = cartelPorUrl.get(c.url) || c.texto;
+    const actos = tieneCartel ? extraerActos(full, c.revisadoEl) : [];
+    if (actos.length) {
+      for (const a of actos) {
+        const r = await subirEvento({
+          titulo: limpio(a.titulo), day: a.day, hora: a.hora,
+          lugar: place, orquestas: a.orquestas,
+          tipo: /verbena|baile/i.test(a.titulo) ? 'verbena' : 'actuacion',
+          c, muni, marca: marca + ' · acto de programa',
+          motivosBase: (c.motivos || []).slice(0, 3) });
+        if (!c.eventoId) c.eventoId = r.id;
+        promovidos.push(r);
+      }
+      continue;
+    }
+    // 2) Sin actos: evento genérico del programa (solo novedosos con fecha).
+    if (accionPor.get(c.id) !== 'novedoso' || c.eventoId) continue;
+    if (!c.eventoDay) continue;
+    const [ed, em, ey] = c.eventoDay.split('-').map(Number);
+    if (!ey || new Date(ey, em - 1, ed) < hoy0()) continue;
     const cart = (c.texto.split('[CARTEL]')[1] || '');
     const lineaCartel = cart.split('\n').map((s) => s.trim()).find((s) => s.length > 15 && /fiesta|programa|verbena|baile|honor|carmen/i.test(s));
-    const place = placeDe(c.cuenta);
-    const limpio = (s) => String(s || '').replace(/[|*_#>`]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 90);
     let titulo = limpio(lineaCartel) || `Programa de fiestas de ${place || muni}`;
     if (place && !normT(titulo).includes(normT(place).split(' ')[0])) titulo += ` (${place})`;
     const mHora = (c.texto.match(/(19|2[0-3]):\d{2}/) || [])[0] || '';
     const mLugar = (c.texto.match(/(?:plaza|parque|recinto)[\wáéíóúñ\s]{0,30}/i) || [])[0] || '';
-    const dayNum = ey * 10000 + em * 100 + ed;
-    const clave = claveProg(muni, c.eventoDay, titulo, c.orquestas || []);
-    const id = 'fb-' + (() => {
-      let h1 = 0xdeadbeef;
-      const s = clave;
-      for (let i = 0; i < s.length; i++) { h1 = Math.imul(h1 ^ s.charCodeAt(i), 2654435761); }
-      return (h1 >>> 0).toString(36);
-    })();
-    const marca = `programa en Facebook (${String(c.cuenta).split('/').filter(Boolean).pop()})`;
-    // 1) ¿Ya existe por clave (esta u otra fuente)? → enriquecer.
-    const hit = porClave.get(clave);
-    const existenteId = hit?.id || null;
-    const existente = hit?.e || null;
-    if (existente) {
-      const orqU = [...(existente.orquestas || [])];
-      for (const o of c.orquestas || []) {
-        if (!orqU.some((x) => alnumL(x) === alnumL(o))) orqU.push(o);
-      }
-      await fetch(`${DB}/events/${existenteId}.json`, { method: 'PATCH', body: JSON.stringify({
-        orquestas: orqU,
-        motivos: [...new Set([...(existente.motivos || []), marca])],
-        fuentes: [...new Set([...(existente.fuentes || [existente.fuente].filter(Boolean)), 'facebook'])],
-        score: Math.max(existente.score || 0, c.score || 0),
-        actualizadoAt: Date.now() }) });
-      c.eventoId = existenteId;
-      promovidos.push({ titulo: existente.titulo || titulo, day: existente.day || c.eventoDay, accion: 'enriquecido' });
-      continue;
-    }
-    // 2) Nuevo (ID estable: repasadas idempotentes).
-    const doc = {
-      id, titulo, day: c.eventoDay, dayNum, hora: mHora, municipio: muni,
-      lugar: (mLugar || place || '').slice(0, 80), orquestas: c.orquestas || [],
-      tipo: 'programa', url: c.url || '', score: c.score || 4,
-      motivos: [...new Set([marca, ...(c.motivos || []).slice(0, 4)])],
-      fuente: 'facebook', fuentes: ['facebook'],
-      clave, estado: 'activo', fotos: c.fotos || [],
-      programaDe: c.id, actualizadoAt: Date.now()
-    };
-    const r = await fetch(`${DB}/events/${id}.json`, { method: 'PUT', body: JSON.stringify(doc) });
-    if (!r.ok) throw new Error(`PUT events/${id}: HTTP ${r.status}`);
-    c.eventoId = id;
-    promovidos.push({ titulo, day: c.eventoDay, accion: 'nuevo' });
+    const r = await subirEvento({
+      titulo, day: c.eventoDay, hora: mHora, lugar: mLugar || place,
+      orquestas: c.orquestas || [], tipo: 'programa',
+      c, muni, marca, motivosBase: (c.motivos || []).slice(0, 4) });
+    c.eventoId = r.id;
+    promovidos.push(r);
   }
   if (promovidos.length) {
     mdPromovidos = `\n## Programas dados de alta\n\n` +
       promovidos.map((p) => `- ${p.accion === 'nuevo' ? '🆕' : '✅'} ${p.titulo} (${p.day})`).join('\n') + '\n';
   }
+  // Sustitución determinista: mismo acto (programa + título) con distinto
+  // día = fecha refinada → fuera; gemelos exactos (mismo día+hora) → se queda
+  // el promovido hoy, si no el menor ID (sin flip-flop entre pasadas).
+  try {
+    const promoPorGrupo = new Map(); // prog|tit|day|hora -> id promovido
+    const diasPorActo = new Map(); // prog|tit -> Set(day) promovidos
+    for (const p of promovidos) {
+      if (!p.prog) continue;
+      const kt = p.prog + '|' + (p.titulo || '').slice(0, 45);
+      if (!diasPorActo.has(kt)) diasPorActo.set(kt, new Set());
+      diasPorActo.get(kt).add(p.day);
+      promoPorGrupo.set(kt + '|' + p.day + '|' + (p.hora || ''), p.id);
+    }
+    const borrar = [];
+    const vistos = new Map();
+    for (const [id, e] of Object.entries(todosEv)) {
+      if (!e || !e.programaDe) continue;
+      const kt = e.programaDe + '|' + (e.titulo || '').slice(0, 45);
+      if (!diasPorActo.has(kt)) continue; // de otras candidatas: no tocar
+      if (!diasPorActo.get(kt).has(e.day)) { borrar.push(id); continue; }
+      const g = kt + '|' + e.day + '|' + (e.hora || '');
+      if (!vistos.has(g)) { vistos.set(g, id); continue; }
+      const enPromo = promoPorGrupo.get(g);
+      const keep = enPromo && (enPromo === id || enPromo === vistos.get(g)) ? enPromo : [vistos.get(g), id].sort()[0];
+      const drop = keep === id ? vistos.get(g) : id;
+      if (drop !== keep) borrar.push(drop);
+      vistos.set(g, keep);
+    }
+    for (const id of [...new Set(borrar)]) {
+      const r = await fetch(`${DB}/events/${id}.json`, { method: 'DELETE' });
+      if (r.ok) console.log(`  sustituido ${id} (fecha refinada)`);
+    }
+    if (borrar.length) mdPromovidos += `\nSustituidos por fecha refinada: ${[...new Set(borrar)].length}\n`;
+  } catch {}
   console.log(`Programas: ${promovidos.filter((p) => p.accion === 'nuevo').length} nuevos, ${promovidos.filter((p) => p.accion === 'enriquecido').length} enriquecidos`);
 } catch (e) {
   console.log('Programas omitido (' + (e.message || e).split('\n')[0] + ')');
