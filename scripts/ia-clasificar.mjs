@@ -169,12 +169,16 @@ export async function verificarConIA(posts, cfg = {}) {
         try {
           if (intento > 0) await new Promise((r) => setTimeout(r, 20000));
           const arr = await p.fn(lote);
+          let validos = 0;
           for (const v of Array.isArray(arr) ? arr : []) {
             if (typeof v.indice === 'number') {
               const orig = lote[v.indice];
-              if (orig) out.set(orig.indice, v);
+              if (orig) { out.set(orig.indice, v); validos++; }
             }
           }
+          // Lote vacío en tier gratuito = respuesta inútil (rate-limit con
+          // 200), no "todo irrelevante": se reintenta y si no, decide la regex.
+          if (lote.length > 2 && validos === 0) throw new Error('lote vacío sin veredictos');
           ok = true;
         } catch (e) {
           console.warn(`IA ${p.nombre}: fallo lote (intento ${intento + 1}, ${lote.length} posts) (${String(e.message || e).split('\n')[0].slice(0, 100)})`);

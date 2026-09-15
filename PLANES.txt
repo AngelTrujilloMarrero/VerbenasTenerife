@@ -225,3 +225,14 @@ IMAGEN→CANDIDATA (Las Eras) 15-sep-2026 (verificado):
 - Bug fecha: "hasta el miércoles 23" se leía como "este miércoles" (16-09);
   el "el <día>" ya no casa tras "hasta". Con cuota IA (agotada hoy, 50/día)
   dará el 20-09 exacto.
+
+PROGRAMAS→EVENTOS 15-sep-2026 (verificado, idempotente):
+- Nueva fase 2e: candidatas novedosas con fecha+municipio se dan de alta en
+  events con la clave de dedup.ts (paridad reimplementada). Si la clave ya
+  existe se enriquece; si no, se crea con ID estable (hash de la clave).
+- Las Eras ya es evento (Fasnia 23-09, tipo programa, cartel+fotos).
+  Re-ejecuciones: 0 nuevos (idempotente probado 3 veces).
+- Cazado al probar: el orderBy por REST exige índice en reglas → match por
+  clave en local tras UNA descarga (y se borró el nodo basura events/error).
+- Lotes IA vacíos ya no marcan vistos (un 200 vacío tumbaba de 44 a 10
+  candidatas); sin veredictos decide la regex. Hora: solo tarde (19-23h).
