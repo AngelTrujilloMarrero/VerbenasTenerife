@@ -96,6 +96,20 @@ export async function volcarVerbenas(
   if (!base) return { leidas: 0, escritas: 0, fusionadas: 0 };
   let escritas = 0, fusionadas = 0;
   const ahora = Date.now();
+  // Mapa clave->id en memoria: el orderBy+equalTo por REST/Admin exige el
+  // índice 'clave' desplegado en consola (si no, "Index not defined" y la
+  // fusión entre fuentes muere en silencio). Así no depende de las reglas.
+  const porClave = new Map<string, string>();
+  try {
+    const todo = await base.ref('events').get();
+    if (todo.exists()) {
+      for (const [id, e] of Object.entries(todo.val() as Record<string, EventoDB>)) {
+        if (e?.clave && !porClave.has(e.clave)) porClave.set(e.clave, id);
+      }
+    }
+  } catch (e) {
+    console.error('db: precarga de claves fallo', (e as Error)?.message || e);
+  }
   for (const v of verbenas) {
     // Solo presente y futuro: lo pasado no entra en la BD.
     if (!esFutura(v.day)) continue;
@@ -123,25 +137,30 @@ export async function volcarVerbenas(
         }
         continue;
       }
-      // 2) ¿Otra fuente lo guardó con otro ID? (misma clave canónica)
-      const q = await base.ref('events').orderByChild('clave').equalTo(clave).limitToFirst(1).get();
-      if (q.exists()) {
-        const key = Object.keys(q.val())[0];
-        const prev = q.val()[key] as EventoDB;
-        const merged = fusionarDB(
-          { ...prev, fuentes: prev.fuentes?.length ? prev.fuentes : [prev.fuente || ''] }, nuevo);
-        const doc: EventoDB = { ...prev, ...merged, id: key, fuente: merged.fuentes[0],
-          clave, estado: prev.estado || 'activo',
-          actualizadoAt: ahora, dayNum: dayNum(merged.day) };
-        await base.ref(`events/${key}`).set(doc);
-        escritas++;
-        fusionadas++;
-        continue;
+      // 2) ¿Otra fuente lo guardó con otro ID? (misma clave canónica;
+      // se busca en el mapa en memoria, sin orderBy por las reglas).
+      const otroId = porClave.get(clave);
+      if (otroId) {
+        const prevSnap = await base.ref(`events/${otroId}`).get();
+        if (!prevSnap.exists()) { porClave.delete(clave); }
+        else {
+          const prev = prevSnap.val() as EventoDB;
+          const merged = fusionarDB(
+            { ...prev, fuentes: prev.fuentes?.length ? prev.fuentes : [prev.fuente || ''] }, nuevo);
+          const doc: EventoDB = { ...prev, ...merged, id: otroId, fuente: merged.fuentes[0],
+            clave, estado: prev.estado || 'activo',
+            actualizadoAt: ahora, dayNum: dayNum(merged.day) };
+          await base.ref(`events/${otroId}`).set(doc);
+          escritas++;
+          fusionadas++;
+          continue;
+        }
       }
       // 3) Nuevo de verdad.
       const doc: EventoDB = { ...v, fuente: fuenteId, fuentes: [fuenteId],
         clave, estado: 'activo', actualizadoAt: ahora, dayNum: dayNum(v.day) };
       await r.set(doc);
+      if (!porClave.has(clave)) porClave.set(clave, v.id);
       escritas++;
     } catch (e) {
       console.error(`db: volcado ${v.id} fallo`, (e as Error)?.message || e);

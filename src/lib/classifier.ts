@@ -269,7 +269,7 @@ export function extraerOrquestas(titulo: string): string[] {
     // Lugares colados como "orquesta" ("Plaza de San Marcos", "Calle") y
     // topónimos sueltos ("Tenerife") y frases administrativas, no artistas.
     const ES_LUGAR = /plaza|plazola|parque|cancha|calle|callej[oó]n|teatro|iglesia|plazoleta|avenida|polideportivo|recinto|campo|pabell[oó]n|auditorio|ermita|parroquia|^(tenerife|canaria|canarias|isla|islas|sur|norte)$/i;
-    const ES_ADMIN = /entrega|premios?|nombramiento|comisi[oó]n|sorteo|rifa|descanso|trofeo|homenaje/i;
+    const ES_ADMIN = /entrega|premios?|nombramiento|comisi[oó]n|sorteo|rifa|descanso|trofeo|homenaje|fuegos?\s+artificiales|pirotecnia/i;
     const add = (raw: string): void => {
       // Si venía de contexto musical ("Grupo La Calle") se conserva aunque
       // parezca callejero; sin contexto ("Plaza de San Marcos" suelta) fuera.
@@ -411,6 +411,34 @@ function nombresOrquesta(): NombreOrquesta[] {
 
 const normSin = (s: string): string =>
   s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
+/** Orquestas huérfanas en un fragmento de OCR con columnas cruzadas:
+ *  históricas del diccionario + compañera ("WAMAMPY y REVELACIÓN").
+ *  Sin exigir contexto musical: el contexto lo pone la línea rescatada
+ *  (verbena explícita con hora en la sección anterior). */
+export function rescatarOrquestas(fragmento: string): string[] {
+  const out: string[] = [];
+  const norm = normSin;
+  const nf = normSin(fragmento);
+  for (const { nombre, re } of nombresOrquesta()) {
+    if (!re.test(nf)) continue;
+    if (out.some((o) => {
+      const a = norm(o), b = norm(nombre);
+      return a === b || a.includes(b) || b.includes(a);
+    })) continue;
+    out.push(nombre);
+  }
+  // "...WAMAMPY y REVELACIÓN": la compañera capitalizada tras la histórica.
+  // Nunca lugares ni genéricos de fiesta (plazas, fuegos, romería...).
+  const NO_ARTISTA = /^(fuegos?|artificiales|pirotecnia|procesion|eucaristia|misa|trail|ruta|salida|meta|dorsales?|festival|feria|gala|pregon|chupinazo|ofrenda|romeria|verbena|baile|plaza|parque|recinto|iglesia|ermita|banda|musica)$/i;
+  for (const o of [...out]) {
+    const m = fragmento.match(new RegExp(escRe(o) + '\\s+y\\s+([A-ZÁÉÍÓÚÑ][A-Za-záéíóúñ]+)', 'i'));
+    if (!m || NO_ARTISTA.test(m[1])) continue;
+    if (out.some((x) => norm(x) === norm(m[1]))) continue;
+    out.push(m[1][0].toUpperCase() + m[1].slice(1).toLowerCase());
+  }
+  return out;
+}
 
 // Contexto musical mínimo para que el nombre no sea prosa ("al amanecer").
 // Rescate religioso solo con baile explícito; escuelas/talleres e
@@ -593,7 +621,7 @@ export interface SeccionDia {
   texto: string;
 }
 
-const HEADER_DIA = /(viernes|s[aá]bado|domingo|lunes|martes|mi[eé]rcoles|jueves)\s*,?\s*(\d{1,2})\b(?!\s*[:.]\d)(?:\s+de\s+([a-záéíóúñ]+)|\s+([a-záéíóúñ]+))?(?:\s+de\s+(20\d{2}))?/gi;
+const HEADER_DIA = /(viernes|s[aá]bado|domingo|lunes|martes|mi[eé]rcoles|jueves)\s*,?\s*(\d{1,2})\b(?!\s*[:.]\d)(?:\s+de\s+([a-záéíóúñ]+)|\s+((?!(?:lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bado|domingo)\b)[a-záéíóúñ]+))?(?:\s+de\s+(20\d{2}))?/gi;
 // Día primero ("18 Viernes", "26 Sábado", "Lunes 09."): algunos programas
 // (Tacoronte) ordenan al revés y sin mes (lo pone el contexto del doc).
 const HEADER_DIA_INV = /(?<!\d)(\d{1,2})\b(?!\s*[:.]\d)\s+(viernes|s[aá]bado|domingo|lunes|martes|mi[eé]rcoles|jueves)\b/gi;
@@ -610,6 +638,58 @@ const NO_ES_DIA = /(hasta|antes\s+del?|desde\s+el|plazo|inscripci[oó]n|cierra?|
 
 const WD_ES = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
 const normWd = (s: string) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
+/** Trozo justo tras el título (hasta el siguiente acto o `radio` chars):
+ *  para rescatar orquestas de la misma fila del cartel sin robar las del
+ *  acto siguiente ("BAILE DE MAGOS ... [siguiente acto] ... XANY" no debe
+ *  heredar a Xany). */
+export function trozoTrasTitulo(secTexto: string, titulo: string, radio = 150): string {
+  const idx = posEn(secTexto, titulo);
+  if (idx === -1) return '';
+  const rest = secTexto.slice(idx + titulo.length, idx + titulo.length + radio);
+  const corte = rest.search(/gran baile|verbena|verbenazo|tardeo|baile\s+(?:de|con|al|amenizad|a\s+cargo)/i);
+  return corte === -1 ? rest : rest.slice(0, corte);
+}
+
+/** Distancia de edición (para enderezar días de semana mangados por el OCR). */
+function distLeven(a: string, b: string): number {
+  const dp: number[] = Array.from({ length: b.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= a.length; i++) {
+    let prev = dp[0];
+    dp[0] = i;
+    for (let j = 1; j <= b.length; j++) {
+      const cur = dp[j];
+      dp[j] = Math.min(dp[j] + 1, dp[j - 1] + 1, prev + (a[i - 1] === b[j - 1] ? 0 : 1));
+      prev = cur;
+    }
+  }
+  return dp[b.length];
+}
+
+/** Endereza días de semana mangados por el OCR ("SáBano 10", "DoMinco 11")
+ *  antes de partir por días: si un token que EMPIEZA como día de semana va
+ *  seguido de número de día, se ajusta al día más cercano (distancia <= 1).
+ *  Solo para textos de OCR (carteles/fotos), nunca para texto web limpio. */
+export function suavizarDiasOcr(texto: string): string {
+  return texto.replace(/\b([A-Za-zÁÉÍÓÚÑáéíóúñ]{5,10})\s+(\d{1,2})\b(?!\s*[:.]\d)/g,
+    (m, tok: string, dia: string) => {
+      const n = normWd(tok);
+      if (n.length < 5) return m;
+      let mejor = '', mejorD = 99;
+      for (const wd of WD_ES) {
+        const nw = normWd(wd);
+        // Mismo arranque para no convertir prosa ("Sabana 10" no es sábado).
+        if (n.slice(0, 3) !== nw.slice(0, 3)) continue;
+        const d = distLeven(n, nw);
+        if (d < mejorD) { mejorD = d; mejor = wd; }
+      }
+      if (!mejor || mejorD > 1 || normWd(mejor) === n) return m;
+      const propio = tok[0] === tok[0].toUpperCase()
+        ? mejor[0].toUpperCase() + mejor.slice(1)
+        : mejor;
+      return `${propio} ${dia}`;
+    });
+}
 
 /** ¿Es coherente la cabecera de la sección con el calendario? Sin día de
  *  semana explícito se acepta; con él, debe cuadrar (tumbar "Sábado 21"
@@ -642,7 +722,10 @@ export function partirPorDias(programa: string, ref?: { mes: string; anyo: strin
   }
   HEADER_DIA_INV.lastIndex = 0;
   while ((m = HEADER_DIA_INV.exec(programa)) !== null) {
-    if (headers.some((h) => Math.abs(h.index - m.index) < 12)) continue;
+    // Mismo día en la misma posición = duplicado de otro patrón; distinto
+    // día pegado ("SÁBADO 3 Sábado 10" de un cartel a dos columnas) son dos
+    // secciones reales y se conservan ambas.
+    if (headers.some((h) => Math.abs(h.index - m.index) < 12 && h.dia === parseInt(m[1], 10))) continue;
     // Con contexto de mes/año se valida día-semana y caen restos de
     // paginación ("24 25 Jueves", "13 14 Domingo"); sin contexto se acepta.
     const mm = ref?.mes || '', yy = ref?.anyo || '';
@@ -657,7 +740,7 @@ export function partirPorDias(programa: string, ref?: { mes: string; anyo: strin
     const pre = programa.slice(Math.max(0, m.index - 40), m.index);
     const wd = pre.match(/(lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bado|domingo)\s*,?\s*$/i);
     if (wd && wd.index !== undefined) ini = Math.max(0, m.index - 40) + wd.index;
-    if (headers.some((h) => Math.abs(h.index - ini) < 12)) continue;
+    if (headers.some((h) => Math.abs(h.index - ini) < 12 && h.dia === parseInt(m[1], 10))) continue;
     // Con mes explícito ("30 de agosto") basta 1 mención; sin mes ("Lunes 09")
     // se evita tragar horas ("13:00 de la tarde" no es día, pero "9 de mayo" sí).
     if (!m[3] && !pre.match(/(lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bado|domingo)\s*,?\s*$/i)) continue;
@@ -666,7 +749,7 @@ export function partirPorDias(programa: string, ref?: { mes: string; anyo: strin
   DIA_EL_MES.lastIndex = 0;
   while ((m = DIA_EL_MES.exec(programa)) !== null) {
     // Evita duplicar un encabezado ya capturado en la misma posición
-    if (headers.some((h) => Math.abs(h.index - m.index) < 12)) continue;
+    if (headers.some((h) => Math.abs(h.index - m.index) < 12 && h.dia === parseInt(m[1], 10))) continue;
     // Evita partir por plazos ("...inscripción (hasta el 10 de septiembre)",
     // "(desde el 9 de septiembre hasta el 17...)"). Se comprueba con y sin
     // el "el" inicial del match, que forma parte de DIA_EL_MES.

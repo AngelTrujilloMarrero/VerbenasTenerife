@@ -20,7 +20,8 @@ const args = Object.fromEntries(process.argv.slice(2).map((a) => {
 const POSTS_DIR = path.join(ROOT, '.cache', 'fb-posts');
 const OCR_DIR = path.join(ROOT, '.cache', 'ocr-auto');
 const TESSDATA = path.join(ROOT, '.cache', 'tesseract');
-const MAX_TOTAL = Number(args['max-total'] || 40);
+const MAX_TOTAL = Number(args['max-total'] || process.env.MAX_OCR_TOTAL || 40);
+const MAX_VISION_DEF = Number(args['max-vision'] || process.env.MAX_VISION || 10);
 const MAX_IMG_BYTES = 15 * 1024 * 1024;
 const TIMEOUT_MS = 90 * 1000;
 const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
@@ -98,7 +99,7 @@ async function descargar(url) {
   return buf;
 }
 
-export async function ocrFotosPosts({ solo = '', maxTotal = MAX_TOTAL, maxVision = Number(args['max-vision'] || 10), forzar = false } = {}) {
+export async function ocrFotosPosts({ solo = '', maxTotal = MAX_TOTAL, maxVision = MAX_VISION_DEF, forzar = false } = {}) {
   const ficheros = fs.existsSync(POSTS_DIR)
     ? fs.readdirSync(POSTS_DIR).filter((x) => x.endsWith('.json') && (!solo || x.includes(solo)))
     : [];
@@ -189,6 +190,6 @@ export async function ocrFotosPosts({ solo = '', maxTotal = MAX_TOTAL, maxVision
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] || '').href) {
-  ocrFotosPosts({ solo: String(args.solo || ''), maxTotal: MAX_TOTAL, maxVision: Number(args['max-vision'] || 10), forzar: !!args.forzar })
+  ocrFotosPosts({ solo: String(args.solo || ''), maxTotal: MAX_TOTAL, maxVision: MAX_VISION_DEF, forzar: !!args.forzar })
     .catch((e) => { console.error('OCR-FB FALLO:', e.message); process.exit(1); });
 }

@@ -106,6 +106,26 @@ async function procesarImagenes(clave: string, lista: string[]): Promise<void> {
   console.log(`ocr-auto galería OK ${clave}: ${paginas.length} imgs, ${texto.length} caracteres`);
 }
 
+/** Lanza el OCR de una ÚNICA imagen de cartel (portada de noticia con el
+ *  programa, p. ej. Candelaria `featured_media`) en 2º plano. `clave` estable
+ *  (URL de la imagen) para la caché en disco. A diferencia de la galería, una
+ *  sola imagen con nombre de programa vale por sí sola. */
+export function lanzarOcrAutoImagen(clave: string, img: string, municipio: string): void {
+  if (leerOcrAuto(clave)) return;
+  if (enVuelo.has(clave)) return;
+  const fallo = ultimoFallo.get(clave) || 0;
+  if (Date.now() - fallo < REINTENTO_FALLO_MS) return;
+  if (!/^https?:/i.test(img)) return;
+  avisar(municipio, 'ocr-en-curso', clave, 'OCR automático de cartel en 2º plano (estará en el siguiente ciclo)');
+  const job = procesarImagenes(clave, [img]).catch((e) => {
+    ultimoFallo.set(clave, Date.now());
+    console.error(`ocr-auto cartel fallo ${clave}`, e);
+  }).finally(() => {
+    enVuelo.delete(clave);
+  });
+  enVuelo.set(clave, job);
+}
+
 /** ¿Hablan dos textos del mismo programa? (evita procesar el auto si el
  *  manual versionado ya lo cubre: solape de tokens >= 80% en el corto). */
 export function textoSimilar(a: string, b: string): boolean {

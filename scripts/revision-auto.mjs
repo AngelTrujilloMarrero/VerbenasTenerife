@@ -84,7 +84,14 @@ if (!args['sin-extraer']) {
 // ---------- 2a-bis. OCR de carteles (fotos de posts pre-filtrados) ----------
 if (!args['sin-extraer'] || args['con-ocr']) {
   console.log('2a-bis/3 OCR de carteles…');
-  const r = spawnSync(NODE, ['scripts/ocr-fb.mjs'], { cwd: ROOT, stdio: 'inherit' });
+  const ocrArgs = ['scripts/ocr-fb.mjs'];
+  // Caps configurables: --max-total=N --max-vision=N o .env
+  // (MAX_OCR_TOTAL / MAX_VISION). Sin ellos, defaults 40/10.
+  const mt = args['max-total'] || envLocal('MAX_OCR_TOTAL');
+  const mv = args['max-vision'] || envLocal('MAX_VISION');
+  if (mt) ocrArgs.push(`--max-total=${mt}`);
+  if (mv) ocrArgs.push(`--max-vision=${mv}`);
+  const r = spawnSync(NODE, ocrArgs, { cwd: ROOT, stdio: 'inherit' });
   if (r.status !== 0) console.warn('OCR-FB acabó con código', r.status, `(signal ${r.signal || '-'}, error ${r.error?.message || '-'})`, '(se clasifica sin carteles)');
   await marcarProgreso({ fase: 'clasificando' });
 }

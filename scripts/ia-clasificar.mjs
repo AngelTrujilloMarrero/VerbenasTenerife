@@ -124,6 +124,7 @@ export async function verificarConIA(posts, cfg = {}) {
   const gasto = { proveedor: null, tokens: 0, costeUSD: 0 };
   if (!posts.length) return { veredictos: out, gasto, vistos: [] };
   const hoy = cfg.hoy;
+  const proveedores = [];
   if (cfg.customBase) {
     proveedores.push({ nombre: 'Custom', fn: (l) => loteOpenAI(l, hoy, cfg.customBase, cfg.customKey || '', cfg.customModel || 'qwen3:8b', 'Custom') });
   }
@@ -132,7 +133,7 @@ export async function verificarConIA(posts, cfg = {}) {
   const maxPosts = cfg.maxPosts || 120;
   const lista = posts.slice(0, maxPosts);
   if (posts.length > maxPosts) console.warn(`IA: cap ${maxPosts} posts (había ${posts.length})`);
-  const proveedores = [];
+  // (proveedores ya declarado arriba; Custom va primero si hay IA_BASE_URL)
   if (cfg.geminiKey) {
     const model = cfg.geminiModel || 'gemini-2.5-flash';
     proveedores.push({ nombre: 'Gemini', fn: (l) => loteGemini(l, hoy, cfg.geminiKey, model) });

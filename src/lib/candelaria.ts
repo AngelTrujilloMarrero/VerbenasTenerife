@@ -12,13 +12,16 @@ import {
   normalizarHoras,
   partirPorDias,
   recortarProsa,
+  rescatarOrquestas,
+  suavizarDiasOcr,
+  trozoTrasTitulo,
   tipoDeEvento,
   ventana
 } from './classifier.js';
 import { fetchText, textoConSaltos } from './http.js';
 import { avisar, rastrearProgramas } from './avisos.js';
 import { textoOcr } from './ocr.js';
-import { lanzarOcrAutoImagenes, leerOcrAuto, textoSimilar } from './ocr-auto.js';
+import { lanzarOcrAutoImagen, lanzarOcrAutoImagenes, leerOcrAuto, textoSimilar } from './ocr-auto.js';
 import { anyoDelTexto, obtenerTextoPdf } from './pdf.js';
 import type { Verbena } from './types.js';
 
@@ -67,13 +70,24 @@ const espera = (ms: number) => new Promise((r) => setTimeout(r, ms));
 interface PostRest {
   date?: string;
   link?: string;
+  featured_media?: number;
   title?: { rendered?: string };
   content?: { rendered?: string };
 }
 
-interface Candidato { titulo: string; cuerpo: string; url: string; anyo: string }
+interface Candidato { titulo: string; cuerpo: string; url: string; anyo: string; destacada?: string }
 
 const RE_CANDELARIA = /candelaria|virgen|patrona|morenita|socorro|carmen|santa ana|romer[ií]a|magos|carnaval|verbena|baile|orquesta|programa|fiesta|sardinada|ofrenda|marea/i;
+
+// La portada del post (`featured_media`) suele SER el cartel del programa
+// (Dolores 2026: noticia sin fotos ni PDF, cartel solo en la destacada).
+// Si el nombre trae año vigente + pinta de programa, va al OCR de carteles.
+function esCartel(src: string, vigente: string): boolean {
+  if (!/^https?:/i.test(src)) return false;
+  if (!/\.(jpe?g|png|webp)$/i.test(src.split('?')[0])) return false;
+  if (!src.includes(vigente)) return false;
+  return /programa|fiesta|cartel|verbena|romer/i.test(src);
+}
 
 function sinHtml(s: string): string {
   return (s || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
@@ -84,20 +98,22 @@ async function descubrir(): Promise<Candidato[]> {
   const out: Candidato[] = [];
   const seen = new Set<string>();
   const vigente = String(new Date().getFullYear());
+  const porUrl = new Map<string, number>();
   const mete = (p: PostRest) => {
-    const titulo = sinHtml(p.title?.rendered);
+    const titulo = sinHtml(p.title?.rendered || '');
     const url = p.link || '';
     if (!titulo || titulo.length < 10 || !url.startsWith(BASE + '/') || seen.has(url)) return;
     if (!p.date?.startsWith(vigente)) return;
     if (!clasificarTitulo(titulo).esVerbena && !esContenedor(titulo) && !RE_CANDELARIA.test(titulo)) return;
     seen.add(url);
     out.push({ titulo, cuerpo: p.content?.rendered || '', url, anyo: vigente });
+    if (typeof p.featured_media === 'number' && p.featured_media > 0) porUrl.set(url, p.featured_media);
   };
   const queries = ['orquesta', 'verbena', 'fiestas', 'baile', 'romeria', 'programa'];
   for (const q of queries) {
     try {
       const j = JSON.parse(await fetchText(
-        `${REST}/posts?search=${encodeURIComponent(q)}&per_page=20&_fields=date,link,title,content`));
+        `${REST}/posts?search=${encodeURIComponent(q)}&per_page=20&_fields=date,link,title,content,featured_media`));
       if (Array.isArray(j)) j.forEach(mete);
     } catch { /* sigue con la siguiente query */ }
     if (out.length >= MAX_DETALLES) break;
@@ -105,10 +121,27 @@ async function descubrir(): Promise<Candidato[]> {
   if (out.length < MAX_DETALLES) {
     try {
       const j = JSON.parse(await fetchText(
-        `${REST}/posts?categories=41&per_page=15&_fields=date,link,title,content`));
+        `${REST}/posts?categories=41&per_page=15&_fields=date,link,title,content,featured_media`));
       if (Array.isArray(j)) j.forEach(mete);
     } catch { /* sin repesca */ }
   }
+  // Resuelve las portadas (featured_media -> source_url) en una sola
+  // petición; la que pinte a cartel se guarda en el candidato.
+  try {
+    const ids = [...new Set(porUrl.values())];
+    if (ids.length) {
+      const j = JSON.parse(await fetchText(
+        `${REST}/media?include=${ids.join(',')}&per_page=${ids.length}&_fields=id,source_url`));
+      const porId = new Map<number, string>();
+      if (Array.isArray(j)) for (const m of j) {
+        if (typeof m?.id === 'number' && typeof m?.source_url === 'string') porId.set(m.id, m.source_url);
+      }
+      for (const c of out) {
+        const src = porId.get(porUrl.get(c.url) || 0) || '';
+        if (src && esCartel(src, vigente)) c.destacada = src;
+      }
+    }
+  } catch { /* sin portadas: se sigue con el texto */ }
   return out.slice(0, MAX_DETALLES);
 }
 
@@ -223,7 +256,7 @@ export async function obtenerVerbenasCandelaria(): Promise<Verbena[]> {
     if (!verbenas.some((x) => x.id === v.id)) verbenas.push(v);
   };
 
-  const procesar = (cuerpo: string, opts: { anyo: string; slug: string; url: string; etiqueta: string; validarDia?: boolean }) => {
+  const procesar = (cuerpo: string, opts: { anyo: string; slug: string; url: string; etiqueta: string; validarDia?: boolean; mesDefecto?: string; rescateColumnas?: boolean }) => {
     const limpio = cuerpo.replace(/SÁBAD O/gi, 'SÁBADO').replace(/D OMINGO/gi, 'DOMINGO');
     const ctx = mesContexto(limpio);
     const mesDoc = ctx.mes || mesDominante(limpio);
@@ -233,6 +266,12 @@ export async function obtenerVerbenasCandelaria(): Promise<Verbena[]> {
       : nucleoDe(limpio) || MUNI;
     let mesPrev = '', anyoPrev = '';
     const secciones = partirPorDias(juntarHoraLugar(limpio), ref);
+    interface LineaSec {
+      i: number; day: string; secTexto: string; contextoHora: string; lugarSec: string;
+      titulo: string; hora: string; orquestas: string[]; extra: number; origen: 'sub' | 'libre';
+    }
+    const diasPorSec = new Map<number, { day: string; mes: string; anyo: string }>();
+    const todas: LineaSec[] = [];
     for (const [i, sec] of secciones.entries()) {
       if (sec.mes) mesPrev = sec.mes;
       if (sec.anyo) anyoPrev = sec.anyo;
@@ -245,32 +284,76 @@ export async function obtenerVerbenasCandelaria(): Promise<Verbena[]> {
           if (secciones[j].mes && /de\s+[a-záéíóúñ]+/i.test(secciones[j].texto.slice(0, 60))) mes = mesANum(secciones[j].mes);
         }
       }
+      // Los carteles traen días sin mes ("Viernes 9", "Sábado 10"): el mes
+      // lo pone el anuncio de la noticia ("del 2 al 11 de octubre"). Sin
+      // mes ni defecto la sección se salta; con validarDia el calendario
+      // tumba la sección si el mes por defecto no cuadra (sin fechas falsas).
+      if (!mes) mes = opts.mesDefecto || '';
       if (!mes) continue;
       const anyoSec = sec.anyo || anyoPrev || opts.anyo;
       // OCR auto: la cabecera con día de semana debe cuadrar en calendario
       // ("Sábado 21" de un marzo leído como julio se tumba entera).
       if (opts.validarDia && !diaSemanaValido(sec.texto, sec.dia, mes, anyoSec)) continue;
       const day = `${String(sec.dia).padStart(2, '0')}-${mes}-${anyoSec}`;
+      diasPorSec.set(i, { day, mes, anyo: anyoSec });
       const contextoHora = (secciones[i - 1]?.texto.slice(-600) || '') + sec.texto;
       const lugarSec = nucleoDe(sec.texto) || MUNI;
       const lineas = [
-        ...extraerSubEventos(sec.texto).map((s) => ({ titulo: s.titulo, hora: s.hora, orquestas: s.orquestas, extra: 0 })),
+        ...extraerSubEventos(sec.texto).map((s) => ({ titulo: s.titulo, hora: s.hora, orquestas: s.orquestas, extra: 0, origen: 'sub' as const })),
         ...extraerBailesSinHora(sec.texto).map((s) => ({
-          titulo: s.titulo, hora: horaPreviaDoc(contextoHora, s.titulo), orquestas: s.orquestas, extra: s.explicita ? 2 : 0
+          titulo: s.titulo, hora: horaPreviaDoc(contextoHora, s.titulo), orquestas: s.orquestas, extra: s.explicita ? 2 : 0, origen: 'libre' as const
         }))
       ];
       for (const l of lineas) {
-        const lugarLinea = lugarCercano(sec.texto, l.titulo) || lugarContinuacion(sec.texto, l.titulo) || (limpio.length < 3000 ? lugarDoc : lugarSec);
-        const cls = clasificarDetalle(l.titulo, ventana(sec.texto, l.titulo, 400), l.hora, lugarLinea, l.extra);
-        if (!cls.esVerbena) continue;
-        push({
-          id: `candelaria-${opts.slug.slice(0, 20)}-${l.hora.replace(':', '') || 'sh'}-${day}-${l.titulo.split(/\s+/).slice(0, 3).join(' ')}`.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9-]+/g, '-'),
-          titulo: l.titulo, day, hora: l.hora, municipio: MUNI,
-          lugar: lugarLinea, orquestas: l.orquestas,
-          tipo: tipoDeEvento(l.titulo), url: opts.url,
-          score: cls.score, motivos: [...cls.motivos, opts.etiqueta]
+        todas.push({
+          i, day, secTexto: sec.texto, contextoHora, lugarSec,
+          titulo: l.titulo, hora: l.hora, orquestas: l.orquestas, extra: l.extra, origen: l.origen
         });
       }
+    }
+    // Rescate de columnas cruzadas (solo carteles): el OCR a dos columnas
+    // deja la verbena explícita ("23:00 h. VERBENA con las orquestas DL")
+    // en la sección anterior y sus orquestas ("...WAMAMPY y REVELACIÓN")
+    // al inicio de la siguiente. Si la línea es explícita, no trae
+    // orquestas y la sección siguiente no aporta bailes propios, el evento
+    // hereda día y orquestas de la sección siguiente (validada en calendario).
+    if (opts.rescateColumnas) {
+      for (const t of todas) {
+        if (t.origen !== 'sub' || t.orquestas.length) continue;
+        if (todas.some((o) => o !== t && o.i === t.i + 1)) continue;
+        const sig = secciones[t.i + 1];
+        const dSig = diasPorSec.get(t.i + 1);
+        if (!sig || !dSig) continue;
+        const huerfanas = rescatarOrquestas(sig.texto.slice(0, 300));
+        if (!huerfanas.length) continue;
+        if (opts.validarDia && !diaSemanaValido(sig.texto, sig.dia, dSig.mes, dSig.anyo)) continue;
+        t.day = dSig.day;
+        t.orquestas = huerfanas;
+        t.titulo = t.titulo.replace(/\s+con\s+las?\s+orquestas?\s+[A-ZÁÉÍÓÚÑ]{1,3}$/i, '');
+      }
+    }
+    for (const t of todas) {
+      const lugarLinea = lugarCercano(t.secTexto, t.titulo) || lugarContinuacion(t.secTexto, t.titulo) || (limpio.length < 3000 ? lugarDoc : t.lugarSec);
+      const vent = ventana(t.secTexto, t.titulo, 400);
+      // En carteles a dos columnas el OCR deja la verbena sin sus orquestas
+      // ("...orquestas DL"): se rescatan del trozo tras el título (misma
+      // fila del cartel, hasta el siguiente acto) para no robar las del
+      // acto vecino.
+      if (!t.orquestas.length && opts.rescateColumnas) {
+        t.orquestas = rescatarOrquestas(trozoTrasTitulo(t.secTexto, t.titulo));
+        if (t.orquestas.length) {
+          t.titulo = t.titulo.replace(/\s+con\s+las?\s+orquestas?\s+[A-ZÁÉÍÓÚÑ]{1,3}$/i, '');
+        }
+      }
+      const cls = clasificarDetalle(t.titulo, vent, t.hora, lugarLinea, t.extra);
+      if (!cls.esVerbena) continue;
+      push({
+        id: `candelaria-${opts.slug.slice(0, 20)}-${t.hora.replace(':', '') || 'sh'}-${t.day}-${t.titulo.split(/\s+/).slice(0, 3).join(' ')}`.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9-]+/g, '-'),
+        titulo: t.titulo, day: t.day, hora: t.hora, municipio: MUNI,
+        lugar: lugarLinea, orquestas: t.orquestas,
+        tipo: tipoDeEvento(t.titulo), url: opts.url,
+        score: cls.score, motivos: [...cls.motivos, opts.etiqueta]
+      });
     }
   };
 
@@ -314,6 +397,9 @@ export async function obtenerVerbenasCandelaria(): Promise<Verbena[]> {
   }
   for (const it of items) {
     try {
+      // Si el cartel de la portada ya tiene OCR, manda el cartel (preciso)
+      // y el anuncio vago no duplica (misma verbena con día de inicio).
+      if (it.destacada && leerOcrAuto(it.destacada)?.texto) continue;
       const cuerpo = normalizarHoras(textoConSaltos(it.cuerpo));
       const slug = it.url.split('/').filter(Boolean).pop() || 'noticia';
       procesar(cuerpo, { anyo: it.anyo, slug, url: it.url, etiqueta: `noticia: ${it.titulo.slice(0, 50)}` });
@@ -322,9 +408,35 @@ export async function obtenerVerbenasCandelaria(): Promise<Verbena[]> {
     }
   }
 
+  // 2b) Carteles en la portada de la noticia (featured_media): el programa
+  // a veces solo vive ahí (Dolores 2026: noticia sin fotos ni PDF y cartel
+  // solo en la destacada). Clave = URL de la imagen (estable entre ciclos).
+  const ocrPrevio = textoOcr('candelaria');
+  const ocrPrevioCubre = (t: string): boolean => !!ocrPrevio?.texto && textoSimilar(t, ocrPrevio.texto);
+  for (const it of items) {
+    if (!it.destacada) continue;
+    const auto = leerOcrAuto(it.destacada);
+    if (auto?.texto) {
+      if (ocrPrevioCubre(auto.texto)) continue;
+      const slug = (it.destacada.split('/').pop() || 'cartel').toLowerCase()
+        .replace(/\.(jpe?g|png|webp).*$/, '').replace(/[^a-z0-9]+/g, '-').slice(0, 30);
+      const anuncio = normalizarHoras(textoConSaltos(it.cuerpo));
+      const mesAnuncio = mesContexto(anuncio).mes || mesDominante(anuncio);
+      const cartelTxt = suavizarDiasOcr(normalizarHoras(auto.texto));
+      procesar(cartelTxt, {
+        anyo: it.anyo, slug, url: it.url,
+        etiqueta: `cartel: ${it.titulo.slice(0, 50)}`,
+        validarDia: true, mesDefecto: mesAnuncio, rescateColumnas: true
+      });
+    } else {
+      lanzarOcrAutoImagen(it.destacada, it.destacada, MUNI);
+      avisar(MUNI, 'programa-imagen', it.url, `cartel en portada sin OCR: ${it.destacada.split('/').pop()}`);
+    }
+  }
+
   // 3) Programas publicados solo como imágenes (OCR manual versionado o
   // automático en caché, ver scripts/ocr-programas.mjs y ocr-auto.ts).
-  const ocr = textoOcr('candelaria');
+  const ocr = ocrPrevio;
   if (ocr?.texto) {
     procesar(normalizarHoras(ocr.texto), {
       anyo: ocr.anyo || String(new Date().getFullYear()),
@@ -338,7 +450,7 @@ export async function obtenerVerbenasCandelaria(): Promise<Verbena[]> {
     const auto = leerOcrAuto(f.pueblo);
     if (auto?.texto) {
       if (ocr?.texto && textoSimilar(auto.texto, ocr.texto)) continue; // ya cubierto
-      procesar(normalizarHoras(auto.texto), {
+      procesar(suavizarDiasOcr(normalizarHoras(auto.texto)), {
         anyo: String(new Date().getFullYear()),
         slug: 'ocr-auto',
         url: f.pueblo,
