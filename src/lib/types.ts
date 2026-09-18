@@ -18,6 +18,9 @@ export interface Fuente {
   nombre: string;
   agendaUrl: string;
   obtener: () => Promise<Verbena[]>;
+  /** Handle de Facebook (p. ej. 'sili.garcia'): si está, la fuente lee sus
+   *  eventos de la BD por URL y el cliente la casa también por URL. */
+  fbHandle?: string;
 }
 
 /** Orden cronológico sobre day dd-mm-yyyy. */

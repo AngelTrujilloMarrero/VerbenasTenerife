@@ -32,9 +32,13 @@ export const GET: APIRoute = async ({ url }) => {
           const h = hostDe(f.agendaUrl);
           if (h && h !== 'drive.google.com') hostAId.set(h, f.id);
         }
+        const fbPorHandle = FUENTES.filter((f) => f.fbHandle)
+          .map((f) => ({ id: f.id, tag: '/' + (f.fbHandle as string).toLowerCase() }));
         const porFuente = new Map<string, typeof todas>();
         for (const v of todas) {
-          const fid = hostAId.get(hostDe(v.url))
+          const bajo = v.url.toLowerCase();
+          const fid = fbPorHandle.find((f) => bajo.includes(f.tag))?.id
+            || hostAId.get(hostDe(v.url))
             || FUENTES.find((f) => norm(f.nombre) === norm(v.municipio))?.id
             || 'agregador';
           if (!porFuente.has(fid)) porFuente.set(fid, []);

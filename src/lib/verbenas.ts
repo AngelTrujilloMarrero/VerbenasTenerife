@@ -28,6 +28,7 @@ import { LAGENDA_URL, obtenerVerbenasLagenda } from './lagenda.js';
 import { TENERIFESEVIVE_URL, obtenerVerbenasTenerifeSeVive } from './tenerifesevive.js';
 import { CANARIASFIESTAS_URL, obtenerVerbenasCanariasFiestas } from './canariasfiestas.js';
 import { LALAGUNA_URL, obtenerVerbenasLaLaguna } from './lalaguna.js';
+import { RUTA_CHERNE_URL, SILI_GARCIA_URL, obtenerVerbenasRutaCherne, obtenerVerbenasSiliGarcia } from './fb-prioritarias.js';
 import { SANTACRUZ_URL, obtenerVerbenasSantaCruz } from './santacruz.js';
 import { SANJUANRAMBLA_URL, obtenerVerbenasSanJuanRambla } from './sanjuanrambla.js';
 import { TACORONTE_URL, obtenerVerbenasTacoronte } from './tacoronte.js';
@@ -38,8 +39,8 @@ import { porFecha, type Fuente, type Verbena } from './types.js';
 
 // Registro de fuentes. Añadir un municipio = 1 línea + su adaptador.
 // Escala a 31 sin tocar API ni página. Los agregadores van ÚLTIMOS (lagenda,
-// tenerifesevive, canariasfiestas): sus duplicados con ayuntamientos se
-// descartan (gana la fuente oficial).
+// tenerifesevive, canariasfiestas) y tras ellos las Facebook prioritarias:
+// sus duplicados con ayuntamientos se descartan (gana la fuente oficial).
 export const FUENTES: Fuente[] = [
   { id: 'arona', nombre: 'Arona', agendaUrl: ARONA_URL, obtener: obtenerVerbenasArona },
   { id: 'adeje', nombre: 'Adeje', agendaUrl: ADEJE_URL, obtener: obtenerVerbenasAdeje },
@@ -76,7 +77,11 @@ export const FUENTES: Fuente[] = [
   { id: 'vilaflor', nombre: 'Vilaflor', agendaUrl: VILAFLOR_URL, obtener: obtenerVerbenasVilaflor },
   { id: 'lagenda', nombre: 'Lagenda', agendaUrl: LAGENDA_URL, obtener: obtenerVerbenasLagenda },
   { id: 'tenerifesevive', nombre: 'TenerifeSeVive', agendaUrl: TENERIFESEVIVE_URL, obtener: obtenerVerbenasTenerifeSeVive },
-  { id: 'canariasfiestas', nombre: 'CanariasFiestas', agendaUrl: CANARIASFIESTAS_URL, obtener: obtenerVerbenasCanariasFiestas }
+  { id: 'canariasfiestas', nombre: 'CanariasFiestas', agendaUrl: CANARIASFIESTAS_URL, obtener: obtenerVerbenasCanariasFiestas },
+  // Facebook prioritarias como fuentes de primer nivel (leen de Firebase lo
+  // ya verificado por el monitor). Últimas: ante duplicados gana la oficial.
+  { id: 'sili-garcia', nombre: 'Sili García', agendaUrl: SILI_GARCIA_URL, obtener: obtenerVerbenasSiliGarcia, fbHandle: 'sili.garcia' },
+  { id: 'ruta-cherne', nombre: 'La Ruta del Cherne', agendaUrl: RUTA_CHERNE_URL, obtener: obtenerVerbenasRutaCherne, fbHandle: 'larutadelcherne' }
 ];
 
 export type { Verbena };

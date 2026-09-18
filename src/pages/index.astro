@@ -11,7 +11,7 @@ const filtro = Astro.url.searchParams.get('municipio') || undefined;
 const fuentes = (filtro
   ? FUENTES.filter((f) => f.id === filtro.toLowerCase())
   : FUENTES
-).map((f) => ({ id: f.id, nombre: f.nombre }));
+).map((f) => ({ id: f.id, nombre: f.nombre, fbHandle: f.fbHandle || '' }));
 // Config Firebase web (solo pública) para lectura directa de RTDB.
 // Sin DATABASE_URL se usa la API en vivo (que además rellena la BD).
 const fbConfig = {
@@ -242,6 +242,17 @@ const fbOn = !!(fbConfig.apiKey && fbConfig.databaseURL);
     let hechas = 0;
     const chips = {};
     let grupoAbierto = null;
+
+    // ¿Es el evento de esta fuente? Las Facebook prioritarias (Sili, Cherne)
+    // se casan por fuente/fuentes y, si aún no están volcadas con su id,
+    // por el handle en la URL del post.
+    const handleDe = Object.fromEntries(fuentes.map((f) => [f.id, (f.fbHandle || '').toLowerCase()]));
+    const esDeFuente = (v, fid) => {
+      if (v.fuente === fid) return true;
+      if ((v.fuentes || []).includes(fid)) return true;
+      const h = handleDe[fid];
+      return !!h && String(v.url || '').toLowerCase().includes('/' + h);
+    };
 
     // Nav municipios
     const params = new URLSearchParams(location.search);
@@ -516,14 +527,14 @@ const fbOn = !!(fbConfig.apiKey && fbConfig.databaseURL);
       const mapa = new Map();
       Object.entries(datos).forEach(([id, v]) => mapa.set(id, { id, ...v }));
       let lista = [...mapa.values()];
-      if (fActual) lista = lista.filter((v) => v.fuente === fActual);
+      if (fActual) lista = lista.filter((v) => esDeFuente(v, fActual));
       const hoy0 = new Date(); hoy0.setHours(0, 0, 0, 0);
       lista.forEach((v) => { v.futura = aFecha(v.day) >= hoy0; });
       todas.push(...lista);
       const hoyTxt = `${String(hoy0.getDate()).padStart(2, '0')}-${String(hoy0.getMonth() + 1).padStart(2, '0')}-${hoy0.getFullYear()}`;
       $('badge-hoy').textContent = hoyTxt; $('pie-hoy').textContent = hoyTxt;
       for (const f of fuentes) {
-        const evs = lista.filter((v) => v.fuente === f.id);
+        const evs = lista.filter((v) => esDeFuente(v, f.id));
         const nFut = evs.filter((v) => v.futura).length;
         const m = meta[f.id];
         chips[f.id].className = 'chip ok';
@@ -578,7 +589,7 @@ const fbOn = !!(fbConfig.apiKey && fbConfig.databaseURL);
             todas.push(...deFuente);
             meteoDeFuente(deFuente);
           } catch (err) { /* se queda lo de la BD para esta fuente */ }
-          const nFut = todas.filter((v) => v.fuente === f.id && v.futura).length;
+          const nFut = todas.filter((v) => esDeFuente(v, f.id) && v.futura).length;
           chips[f.id].className = 'chip ok';
           chips[f.id].textContent = `✓ ${f.nombre} (${nFut})`;
           render();
