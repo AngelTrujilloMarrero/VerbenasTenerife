@@ -192,15 +192,39 @@ async function extraerPosts(page, max) {
   });
   if (pideLogin.articulos === 0 && pideLogin.tieneEmail) return { login: true, posts: [] };
   // Scroll hasta tener suficientes artículos NO vacíos (los vacíos suelen ser
-  // cajas laterales o sugeridos que también llevan role=article).
+  // cajas laterales o sugeridos que también llevan role=article). Antes de
+  // leer, se expanden "Ver más" del texto y "Ver más comentarios": los
+  // listados (p. ej. Sili García) quedan truncados sin esto y los bailes que
+  // la gente aporta en comentarios también cuentan (monitoreo constante).
+  async function expandir() {
+    await page.evaluate(() => {
+      const clickSi = (el) => { try { el.click(); } catch {} };
+      document.querySelectorAll('div[role="article"]').forEach((a) => {
+        a.querySelectorAll('span, div[role="button"]').forEach((el) => {
+          const t = (el.innerText || '').trim();
+          if (t.length < 40 && /^(ver m[áa]s|see more)$/i.test(t)) clickSi(el);
+        });
+        a.querySelectorAll('span[role="button"], div[role="button"]').forEach((el) => {
+          const t = (el.innerText || '').trim();
+          if (t.length < 60 && /ver.*comentarios?|comentarios anteriores|mostrar.*comentarios?/i.test(t)) clickSi(el);
+        });
+      });
+    });
+    await espera(1500);
+  }
   let posts = [];
   for (let i = 0; i < 8 && posts.length < max; i++) {
     await page.evaluate(() => window.scrollBy(0, 1500));
     await espera(1500);
+    await expandir();
     posts = await page.$$eval(
       'div[role="article"]',
       (els, n) => els.map((a) => {
-        const texto = (a.innerText || '').slice(0, 2000).trim();
+        const texto = (a.innerText || '').slice(0, 8000).trim();
+        // Comentarios visibles dentro del artículo (tras expandir): se
+        // guardan aparte para clasificarlos también (aportan bailes).
+        const comentarios = [...a.querySelectorAll('[aria-label^="Comentario de"], [aria-label^="Comment by"]')]
+          .map((c) => (c.innerText || '').trim()).filter((t) => t.length > 10).slice(0, 10);
         const hrefs = [...a.querySelectorAll('a')].map((x) => x.href);
         const links = hrefs
           .filter((h) => /\/(posts|photo|reel)\/|fbid=|story_fbid=/.test(h));
@@ -212,14 +236,18 @@ async function extraerPosts(page, max) {
             return h;
           } catch { return h; }
         }).filter((h) => /\.pdf(\?|#|$)/i.test(h) || /drive\.google\.com/i.test(h)))].slice(0, 4);
+        // Solo fotos de contenido (scontent): los iconos de la interfaz
+        // (static.xx/rsrc, emoji) no son carteles y ensuciaban el OCR.
         const imgs = [...a.querySelectorAll('img')].map((im) => im.src)
-          .filter((s) => s.startsWith('http') && !s.includes('emoji'));
+          .filter((s) => s.startsWith('http') && /scontent/.test(s)
+            && !/emoji/.test(s));
         const t = a.querySelector('time');
         const rel = (texto.match(/(\d+\s*min|\d+\s*h\b|ayer|\d+\s*d(?:[ií]as?)?\b|\d+\s*semanas?|\d{1,2}\s*de\s*[a-z]{3,}\.?)/i) || [])[1] || '';
         // Reels: no se verifican (solo importan imagen, texto y PDF).
         const esReel = /\/reel\//.test(links[0] || '') || /\d+:\d+\s*\/\s*\d+:\d+/.test(texto);
         return {
           texto,
+          comentarios,
           url: links[0] || '',
           imagenes: imgs.slice(0, 4),
           pdfs,

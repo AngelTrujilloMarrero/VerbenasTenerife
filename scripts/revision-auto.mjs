@@ -232,7 +232,9 @@ if (fs.existsSync(POSTS_DIR)) {
           !!orquestaEn(t);
         if (vale) ocrValido = t;
       }
-      const textoFull = p.texto + (ocrValido ? '\n[CARTEL] ' + ocrValido : '');
+      const textoComents = ((p.comentarios || []).join('\n')).slice(0, 2000);
+      const textoFull = p.texto + (ocrValido ? '\n[CARTEL] ' + ocrValido : '')
+        + (textoComents ? '\n[COMENTARIOS] ' + textoComents : '');
       const conCartel = !!ocrValido;
       let score = 0;
       const motivos = [];
