@@ -118,6 +118,13 @@ const municipios = [...MUNICIPIOS_31, 'Fuera de Tenerife'];
       ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
     // Ritmo medido por revision-auto.mjs (Plan C); sin medir no se muestra.
     const RITMO = { caliente: '🔥 caliente', templada: '🌤️ templada', fria: '❄️ fría', abandonada: '💤 abandonada' };
+    // Prioritarias de apertura (van primeras y en auto al abrir la web).
+    const PRIO = ['sili.garcia', 'larutadelcherne'];
+    const esPrio = (c) => {
+      const h = String(c.handle || '').toLowerCase();
+      if (PRIO.includes(h)) return true;
+      return PRIO.some((p) => String(c.url || '').toLowerCase().includes('/' + p));
+    };
 
     function avisa(texto, ok = true) {
       msg.className = 'msg ' + (ok ? 'ok' : 'err');
@@ -139,7 +146,7 @@ const municipios = [...MUNICIPIOS_31, 'Fuera de Tenerife'];
           : `guardadas en local Raspberry (${d.total}) — se subirán a Firebase al configurar .env`;
         tbody.innerHTML = cuentas.length ? cuentas.map((c) => `
           <tr>
-            <td><strong>${esc(c.nombre)}</strong><br/>
+            <td><strong>${esc(c.nombre)}</strong>${esPrio(c) ? ' ⭐ <span class="badge ok">prioritaria</span>' : ''}<br/>
               <a href="${esc(c.url)}" target="_blank" rel="noopener" class="muted">${esc(c.handle || c.url)}</a></td>
             <td>${esc(c.municipio || '—')}<br/><span class="badge tipo">${esc(c.tipo)}</span></td>
             <td>${c.activa ? '<span class="badge ok">● activa</span>' : '<span class="badge off">○ pausada</span>'}${c.ritmo ? `<br/><span class="badge tipo">${RITMO[c.ritmo] || esc(c.ritmo)}</span>` : ''}${c.ultimaActividad ? `<br/><span class="muted">hace ${Math.max(0, Math.round((Date.now() - c.ultimaActividad) / 864e5))}d · ${c.postsVistos ?? '?'} posts</span>` : ''}</td>

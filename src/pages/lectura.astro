@@ -82,9 +82,10 @@ export const prerender = false;
           </select>
         </div>
         <button class="btn" id="btn-forzar">▶ Forzar lectura</button>
+        <button class="btn" id="btn-prio">⚡ Prioritarias (Sili + Cherne)</button>
         <button class="btn" id="btn-clasificar">↻ Reclasificar sin extraer</button>
       </div>
-      <p class="muted" id="msg-lanzar" style="margin-bottom:0">La lectura abre el navegador (completa ~1 h). La reclasificación usa la caché (~1 min).</p>
+      <p class="muted" id="msg-lanzar" style="margin-bottom:0">La lectura abre el navegador (completa ~1 h). La prioritaria solo mira Sili García + Ruta del Cherne (~1 min). La reclasificación usa la caché (~1 min).</p>
     </section>
 
     <div class="grid2">
@@ -138,13 +139,16 @@ export const prerender = false;
       const posts = Number($('sel-posts').value);
       msg.textContent = 'Lanzando…';
       try {
+        const body = modo === 'prioritaria'
+          ? { modo, posts: 5 }
+          : { modo, nivel, posts };
         const r = await fetch('/api/fb-revisar', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ modo, nivel, posts })
+          body: JSON.stringify(body)
         });
         const d = await r.json();
         if (!d.ok) throw new Error(d.error || 'fallo');
-        msg.textContent = `✅ ${d.nota || 'En marcha.'} (alcance ${d.nivel || '—'}${d.posts ? `, ${d.posts} posts` : ''} · pid ${d.pid ?? '?'})`;
+        msg.textContent = `✅ ${d.nota || 'En marcha.'} (alcance ${d.nivel || d.modo || '—'}${d.posts ? `, ${d.posts} posts` : ''} · pid ${d.pid ?? '?'})`;
       } catch (e) {
         msg.textContent = '❌ ' + e.message;
       }
@@ -154,6 +158,7 @@ export const prerender = false;
       const alcance = $('sel-nivel').selectedOptions[0].textContent;
       if (confirm(`¿Forzar lectura (${alcance}, ${$('sel-posts').value} posts/cuenta)? Abrirá el navegador y puede tardar ~1 h.`)) lanzar('completa');
     });
+    $('btn-prio').addEventListener('click', () => lanzar('prioritaria'));
     $('btn-clasificar').addEventListener('click', () => lanzar('clasificar'));
 
     const RITMO_EMOJI = { caliente: '🔥', templada: '🌤️', fria: '❄️', abandonada: '💤' };
@@ -207,7 +212,7 @@ export const prerender = false;
       } else {
         $('card-lanzar').style.display = '';
         const ocupado = d.estado === 'en-curso';
-        for (const id of ['btn-forzar', 'btn-clasificar', 'sel-nivel', 'sel-posts']) {
+        for (const id of ['btn-forzar', 'btn-prio', 'btn-clasificar', 'sel-nivel', 'sel-posts']) {
           $(id).disabled = ocupado;
           $(id).style.opacity = ocupado ? '.5' : '1';
         }

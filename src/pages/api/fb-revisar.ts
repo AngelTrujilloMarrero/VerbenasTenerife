@@ -42,7 +42,7 @@ export const POST: APIRoute = async ({ request }) => {
   try {
     body = (await request.json()) as Record<string, unknown>;
   } catch { /* sin body: modo completo */ }
-  const modo = String(body.modo || 'completa'); // completa | clasificar
+  const modo = String(body.modo || 'completa'); // completa | prioritaria | clasificar
   const forzar = body.forzar === true;
   // Alcance y profundidad (solo modo completa; se reenvían al monitor).
   const NIVELES = ['auto', 'todo', 'caliente', 'templada', 'fria'];
@@ -55,10 +55,14 @@ export const POST: APIRoute = async ({ request }) => {
     return json({ ok: false, error: 'Ya hay una revisión en marcha.', progreso: prog }, 409);
   }
 
+  // Prioritaria: Sili García + Ruta del Cherne (apertura de la web, ~1 min).
+  // No pisa el guardado de 20h del barrido programado (sello propio de 6h).
   const args =
     modo === 'clasificar'
       ? ['scripts/revision-auto.mjs', '--forzar', '--sin-extraer']
-      : ['scripts/revision-auto.mjs', '--forzar', `--nivel=${nivel}`, `--posts=${posts}`];
+      : modo === 'prioritaria'
+        ? ['scripts/revision-auto.mjs', '--prioritaria', `--posts=${Math.max(1, Math.min(Number(body.posts || 5), 10)) || 5}`]
+        : ['scripts/revision-auto.mjs', '--forzar', `--nivel=${nivel}`, `--posts=${posts}`];
   // Pre-aviso para que /lectura lo pinte al instante (el script lo pisa).
   // Si ya hay una pasada viva no se toca su fichero: es la dueña del latido.
   if (!hayEnCurso) {
@@ -83,6 +87,8 @@ export const POST: APIRoute = async ({ request }) => {
   hijo.unref();
 
   return json({ ok: true, modo, nivel: modo === 'completa' ? nivel : undefined,
-    posts: modo === 'completa' ? posts : undefined, pid: hijo.pid ?? null,
-    nota: 'Revisión lanzada en el Mac. Sigue el avance en esta misma página.' });
+    posts: modo === 'completa' || modo === 'prioritaria' ? posts : undefined, pid: hijo.pid ?? null,
+    nota: modo === 'prioritaria'
+      ? 'Revisión prioritaria lanzada (Sili García + Ruta del Cherne).'
+      : 'Revisión lanzada en el Mac. Sigue el avance en esta misma página.' });
 };

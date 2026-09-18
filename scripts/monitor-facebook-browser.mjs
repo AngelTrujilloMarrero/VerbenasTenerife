@@ -13,7 +13,10 @@
 // Opciones: --posts=3 --visible (ver lo que hace) --api=http://localhost:4322
 //   --nivel=auto|todo|caliente|templada|fria (filtro por ritmo medido)
 //   --solo-orden (imprime la cola priorizada y sale, sin navegador)
-// Cola: 🎺 en cartel > 📅 temporada/pre-fiesta > 🔥 ritmo > tipo.
+// Cola: ⭐ prioritaria-apertura (Sili García, Ruta del Cherne) > 🎺 en cartel
+//   > 📅 temporada/pre-fiesta > 🔥 ritmo > tipo.
+//   --prioritaria (solo las 2 de apertura: Sili + Cherne, 5 posts c/u;
+//   es lo que dispara la web al abrirse; el resto va en el barrido programado)
 //   --cdp=http://localhost:9222 (en vez de perfil propio, maneja tu Chrome
 //   abierto; ábrelo antes con --remote-debugging-port=9222)
 //
@@ -151,19 +154,35 @@ function leerBoostCartel() {
 const PESO_TIPO = { orquesta: 10, comision: 10, ayuntamiento: 5, otro: 0 };
 const PESO_RITMO = { caliente: 30, templada: 15, fria: 5 };
 
+/** Prioritarias de apertura (Sili García + Ruta del Cherne): primero a mano
+ *  y en auto al abrir la web; el resto va en el barrido programado. */
+const PRIORITARIAS = ['sili.garcia', 'larutadelcherne'];
+function esPrioritaria(c) {
+  const h = String(c.handle || '').toLowerCase().trim();
+  if (h && PRIORITARIAS.includes(h)) return true;
+  const u = String(c.url || '').toLowerCase();
+  return PRIORITARIAS.some((p) => u.includes('/' + p));
+}
+
 function ordenarCuentas(cuentas) {
   const boost = leerBoostCartel();
-  return cuentas
+  const soloPrio = args.prioritaria !== undefined && args.prioritaria !== 'false';
+  let lista = cuentas
     .map((c) => (typeof c === 'string' ? { url: c } : c))
-    .filter((c) => (c.activa ?? true) !== false)
+    .filter((c) => (c.activa ?? true) !== false);
+  // Barrido de apertura: solo las 2 prioritarias (rápido, ~1 min).
+  if (soloPrio) lista = lista.filter(esPrioritaria);
+  return lista
     .map((c) => {
       const temp = enTemporada(c.municipio || '');
       const nom = normTxt(c.nombre || '');
       const enCartel = c.tipo === 'orquesta' && nom &&
         boost.some((b) => nom.includes(b) || b.includes(nom));
+      const prio = esPrioritaria(c);
       const ritmo = c.ritmo || 'caliente'; // sin medir: entra siempre
       let score = (PESO_TIPO[c.tipo] || 0) + (PESO_RITMO[ritmo] ?? 30);
       const motivos = [];
+      if (prio) { score += 500; motivos.push('⭐ prioritaria'); }
       if (enCartel) { score += 200; motivos.push('🎺 en-cartel'); }
       if (temp) { score += 100; motivos.push(temp === 'temporada' ? '📅 temporada' : '📅 pre-fiesta'); }
       motivos.push(ritmo === 'caliente' && !c.ritmo ? '🆕 sin-medir' : '🔥' + ritmo);
@@ -171,7 +190,8 @@ function ordenarCuentas(cuentas) {
     })
     .filter((c) => {
       if (NIVEL === 'todo') return true;
-      if ((c.ritmo || '') === 'abandonada') return false;
+      // Las prioritarias nunca se omiten por abandono: son de apertura.
+      if ((c.ritmo || '') === 'abandonada' && !esPrioritaria(c)) return false;
       if (NIVEL === 'auto') return true;
       return (c.ritmo || 'caliente') === NIVEL;
     })
@@ -264,9 +284,10 @@ async function extraerPosts(page, max) {
 async function main() {
   // La cola se calcula antes de abrir el navegador: --solo-orden sale sin
   // tocar Chromium (rápido, sin sesión).
-  const brutas = (args.todas || args['solo-orden']) ? await cuentasDesdeApi() : leerCuentas();
-  const cuentas = (args.todas || args['solo-orden']) ? ordenarCuentas(brutas) : brutas.map((u) => ({ url: u }));
-  console.log(`Cuentas a revisar: ${cuentas.length} (máx ${MAX_POSTS} posts c/u, nivel=${NIVEL})\n`);
+  const quiereCola = args.todas || args['solo-orden'] || args.prioritaria;
+  const brutas = quiereCola ? await cuentasDesdeApi() : leerCuentas();
+  const cuentas = quiereCola ? ordenarCuentas(brutas) : brutas.map((u) => ({ url: u }));
+  console.log(`Cuentas a revisar: ${cuentas.length} (máx ${MAX_POSTS} posts c/u, nivel=${NIVEL}${args.prioritaria ? ', solo-prioritarias' : ''})\n`);
   if (args.todas) {
     // Solo se leen las no abandonadas (nivel auto): se anuncia lo omitido.
     const activas = brutas.filter((c) => (c.activa ?? true) !== false).length;

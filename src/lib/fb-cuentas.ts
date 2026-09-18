@@ -30,6 +30,18 @@ export type RitmoCuentaFB = (typeof RITMOS_CUENTA)[number];
 
 export const TIPOS_CUENTA: TipoCuentaFB[] = ['ayuntamiento', 'comision', 'orquesta', 'otro'];
 
+/** Cuentas prioritarias: se revisan primero a mano y en auto al abrir la
+ *  web; el resto va en el barrido programado. Handles en minúsculas. */
+export const CUENTAS_PRIORITARIAS = ['sili.garcia', 'larutadelcherne'];
+
+/** ¿Es prioritaria? Casa por handle exacto o por URL que lo contenga. */
+export function esPrioritaria(c: { handle?: string; url?: string }): boolean {
+  const h = String(c.handle || '').toLowerCase().trim();
+  if (h && CUENTAS_PRIORITARIAS.includes(h)) return true;
+  const u = String(c.url || '').toLowerCase();
+  return CUENTAS_PRIORITARIAS.some((p) => u.includes('/' + p));
+}
+
 /** Saca el handle/slug de una URL de Facebook para mostrar y deduplicar. */
 export function handleDeUrl(url: string): string {
   try {

@@ -5,6 +5,8 @@
 //   --sin-extraer: no abre el navegador, solo clasifica lo ya descargado
 //   --nivel=auto|todo|caliente|templada|fria: alcance (se reenvía al monitor)
 //   --posts=N (1-10): posts por cuenta (se reenvía al monitor)
+//   --prioritaria: solo Sili García + Ruta del Cherne (barrido de apertura de
+//   la web, ~1 min; no toca el guardado de 20h del barrido programado).
 import { execFileSync, execSync, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -19,10 +21,20 @@ const args = Object.fromEntries(process.argv.slice(2).map((a) => {
 }));
 const POSTS_DIR = path.join(ROOT, '.cache', 'fb-posts');
 const STAMP = path.join(ROOT, '.cache', 'fb-ultima-revision');
+const STAMP_PRIO = path.join(ROOT, '.cache', 'fb-ultima-prioritaria');
 const MIN_HORAS = 20;
+const MIN_HORAS_PRIO = 6;
 
 // ---------- 0. Guardas ----------
-if (!args.forzar && !args['sin-extraer'] && fs.existsSync(STAMP)) {
+const ES_PRIO = args.prioritaria !== undefined && args.prioritaria !== 'false';
+if (ES_PRIO && !args.forzar && fs.existsSync(STAMP_PRIO)) {
+  const haceH = (Date.now() - Number(fs.readFileSync(STAMP_PRIO, 'utf8') || 0)) / 36e5;
+  if (haceH < MIN_HORAS_PRIO) {
+    console.log(`Prioritarias revisadas hace ${haceH.toFixed(1)}h (<${MIN_HORAS_PRIO}h). Nada que hacer. Usa --forzar para repetir.`);
+    process.exit(0);
+  }
+}
+if (!ES_PRIO && !args.forzar && !args['sin-extraer'] && fs.existsSync(STAMP)) {
   const haceH = (Date.now() - Number(fs.readFileSync(STAMP, 'utf8') || 0)) / 36e5;
   if (haceH < MIN_HORAS) {
     console.log(`Revisado hace ${haceH.toFixed(1)}h (<${MIN_HORAS}h). Nada que hacer. Usa --forzar para repetir.`);
@@ -67,12 +79,14 @@ async function marcarProgreso(parche) {
 // ---------- 1. Extracción ----------
 if (!args['sin-extraer']) {
   const nivelR = String(args.nivel || 'auto').toLowerCase();
-  const postsR = Math.max(1, Math.min(Number(args.posts || 3), 10));
-  console.log(`1/3 Extrayendo últimos posts de las cuentas (nivel=${nivelR}, posts=${postsR})…`);
+  const postsR = Math.max(1, Math.min(Number(args.posts || (ES_PRIO ? 5 : 3)), 10));
+  console.log(`1/3 Extrayendo últimos posts de las cuentas (nivel=${nivelR}, posts=${postsR}${ES_PRIO ? ', solo-prioritarias' : ''})…`);
   await marcarProgreso({ estado: 'en-curso', fase: 'extrayendo', inicio: Date.now(),
     cuentasHechas: 0, cuentasTotal: 0, cuentaActual: '' });
-  const r = spawnSync(NODE, ['scripts/monitor-facebook-browser.mjs', '--todas',
-    `--nivel=${nivelR}`, `--posts=${postsR}`],
+  const monArgs = ['scripts/monitor-facebook-browser.mjs', '--todas',
+    `--nivel=${nivelR}`, `--posts=${postsR}`];
+  if (ES_PRIO) monArgs.push('--prioritaria');
+  const r = spawnSync(NODE, monArgs,
     { cwd: ROOT, stdio: 'inherit' });
   if (r.status !== 0) console.warn('Extracción acabó con código', r.status, `(signal ${r.signal || '-'}, error ${r.error?.message || '-'})`, '(se clasifica lo que haya)');
   await marcarProgreso({ fase: 'ocr' });
@@ -884,6 +898,7 @@ await marcarProgreso({ estado: 'lista', fase: 'lista', fin: Date.now(),
   cuentas, posts: totalPosts, candidatas: candidatas.length, cuentaActual: '' });
 
 if (!args['sin-extraer']) {
-  fs.writeFileSync(STAMP, String(Date.now()));
-  try { execFileSync('osascript', ['-e', `display notification "${candidatas.length} candidatas, ${cambiosEstado.length} cambios de estado" with title "Verbenas: revisión Facebook lista"`]); } catch { /* sin GUI */ }
+  // La prioritaria no pisa el guardado de 20h del barrido programado.
+  fs.writeFileSync(ES_PRIO ? STAMP_PRIO : STAMP, String(Date.now()));
+  try { execFileSync('osascript', ['-e', `display notification "${candidatas.length} candidatas, ${cambiosEstado.length} cambios de estado" with title "Verbenas: revisión Facebook ${ES_PRIO ? 'prioritaria ' : ''}lista"`]); } catch { /* sin GUI */ }
 }

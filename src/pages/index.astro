@@ -437,6 +437,29 @@ const fbOn = !!(fbConfig.apiKey && fbConfig.databaseURL);
     let turnoCarga = 0;
 
     async function main() {
+      // Barrido de apertura: Sili García + Ruta del Cherne (~1 min en el Mac
+      // local; en Vercel responde 501 y se ignora). Throttle 6h en este
+      // navegador para no relanzar en cada F5. No bloquea la pintura.
+      function autoPrio() {
+        try {
+          const k = 'vt_fb_prio', MIN = 6 * 36e5, ahora = Date.now();
+          let ultimo = 0;
+          try { ultimo = Number(localStorage.getItem(k) || 0); } catch {}
+          if (ahora - ultimo < MIN) return;
+          fetch('/api/fb-revisar', { method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ modo: 'prioritaria', posts: 5 }) })
+            .then((r) => {
+              // 409 (ya hay pasada) o 501 (Vercel): no reintentar hasta la
+              // próxima ventana; solo se marca para no insistir.
+              if (r.ok || r.status === 409 || r.status === 501) {
+                try { localStorage.setItem(k, String(ahora)); } catch {}
+              }
+              if (r.ok) console.info('FB prioritarias en marcha (Sili + Cherne)');
+            }).catch(() => {});
+        } catch {}
+      }
+      autoPrio();
       // ?vivo=1 (botón Recargar todo): salta la BD y raspa en vivo; al pasar
       // por la API se re-vuelca a Firebase y se refresca lo obsoleto.
       const params0 = new URLSearchParams(location.search);
