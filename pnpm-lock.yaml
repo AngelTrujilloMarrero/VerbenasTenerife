@@ -34,8 +34,8 @@ importers:
         version: 7.30.1
     devDependencies:
       '@astrojs/node':
-        specifier: ^11.1.9
-        version: 11.1.9(astro@7.4.4(@types/node@26.6.5)(@vercel/functions@3.10.2)(idb-keyval@6.3.0)(yaml@2.9.1))
+        specifier: ^11.1.11
+        version: 11.1.11(astro@7.4.4(@types/node@26.6.5)(@vercel/functions@3.10.2)(idb-keyval@6.3.0)(yaml@2.9.1))
       '@astrojs/vercel':
         specifier: ^11.0.17
         version: 11.0.17(astro@7.4.4(@types/node@26.6.5)(@vercel/functions@3.10.2)(idb-keyval@6.3.0)(yaml@2.9.1))
@@ -122,11 +122,14 @@ packages:
   '@astrojs/internal-helpers@0.13.0':
     resolution: {integrity: sha512-20jxQqnSmpskcGyad7N5l6Xf1gz0UCa6lNde44bEBdaXGpncEYfAZJ142r2ZgzBaG4dUyzGmhqZWv1INU2eiHQ==}
 
+  '@astrojs/internal-helpers@0.13.1':
+    resolution: {integrity: sha512-LgGLGzoC0wCT3mjDYrxz+hct/tws0enpWsLJW3bswHR3PKgusp/H9xRIT8rTdsyvLM0TcRhhvRL30J2oaZNcqA==}
+
   '@astrojs/markdown-satteri@0.4.6':
     resolution: {integrity: sha512-6biKp2lEAYycF3jhv91br+Otyf4EgDFkF1oRL9ks0u/m/YRGmI7XkGQ2MgaM35DslT03f7NtozKtlqfBNkp6bw==}
 
-  '@astrojs/node@11.1.9':
-    resolution: {integrity: sha512-fmWwCINRIf0gyFZlOlYaJGZnoeB5JJAXJvUXlHorhhemOxkftrOcMalwPIyNG2Q3KhncRvYMiJ8nGHsWrdtrpg==}
+  '@astrojs/node@11.1.11':
+    resolution: {integrity: sha512-qUq6rd4ExrUl0ghohvKaSZXciNAz1WSkcWucdfakpfb5/MkgcCdm+xGCB0LGVjnBvBSfwKTsnzPy6RJt6Fyl4A==}
     peerDependencies:
       astro: ^7.2.1
 
@@ -2644,6 +2647,17 @@ snapshots:
       unified: 11.0.5
       yaml: 2.9.1
 
+  '@astrojs/internal-helpers@0.13.1':
+    dependencies:
+      '@types/hast': 3.0.5
+      '@types/mdast': 4.0.4
+      picomatch: 4.0.7
+      retext-smartypants: 6.2.0
+      shiki: 4.5.0
+      smol-toml: 1.9.1
+      unified: 11.0.5
+      yaml: 2.9.1
+
   '@astrojs/markdown-satteri@0.4.6':
     dependencies:
       '@astrojs/internal-helpers': 0.13.0
@@ -2651,9 +2665,9 @@ snapshots:
       github-slugger: 2.0.0
       satteri: 0.10.5
 
-  '@astrojs/node@11.1.9(astro@7.4.4(@types/node@26.6.5)(@vercel/functions@3.10.2)(idb-keyval@6.3.0)(yaml@2.9.1))':
+  '@astrojs/node@11.1.11(astro@7.4.4(@types/node@26.6.5)(@vercel/functions@3.10.2)(idb-keyval@6.3.0)(yaml@2.9.1))':
     dependencies:
-      '@astrojs/internal-helpers': 0.13.0
+      '@astrojs/internal-helpers': 0.13.1
       astro: 7.4.4(@types/node@26.6.5)(@vercel/functions@3.10.2)(idb-keyval@6.3.0)(yaml@2.9.1)
       send: 1.2.1
       server-destroy: 1.0.1
