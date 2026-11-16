@@ -19,7 +19,7 @@
     "astro": "^7.4.11",
     "cheerio": "^1.2.0",
     "firebase": "^12.19.0",
-    "firebase-admin": "^14.5.0",
+    "firebase-admin": "^14.5.1",
     "pdfjs-dist": "^6.4.299",
     "pngjs": "^7.0.0",
     "tesseract.js": "^7.0.0",

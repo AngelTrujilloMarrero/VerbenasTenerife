@@ -18,8 +18,8 @@ importers:
         specifier: ^12.19.0
         version: 12.19.0
       firebase-admin:
-        specifier: ^14.5.0
-        version: 14.5.0(@firebase/app-compat@0.5.18)(@firebase/app@0.16.2)
+        specifier: ^14.5.1
+        version: 14.5.1(@firebase/app-compat@0.5.18)(@firebase/app@0.16.2)
       pdfjs-dist:
         specifier: ^6.4.299
         version: 6.4.299
@@ -1605,8 +1605,8 @@ packages:
   file-uri-to-path@1.0.0:
     resolution: {integrity: sha512-0Zt+s3L7Vf1biwWZ29aARiVYLx7iMGnEUl9x33fbB/j3jR81u/O2LbqK+Bm1CDSNDKVtJ/YjwY7TUd5SkeLQLw==}
 
-  firebase-admin@14.5.0:
-    resolution: {integrity: sha512-DElmgmaH9aPXu2dWXGQiDoan33UfTnbfAAKaue4fwEZxmpdaNrTk5DmuFn+vVDki2KZ6TiaC0IHRWcEzcDxB3Q==}
+  firebase-admin@14.5.1:
+    resolution: {integrity: sha512-3NSWRREeFCET2tyiOd0ENvRFdagi9voBRGCiNbGSIRbwuMJh2Eh/dcmItNWd82rcqd+fyW5/77/oZOZxC27/sA==}
     engines: {node: '>=22'}
 
   firebase@12.19.0:
@@ -4371,7 +4371,7 @@ snapshots:
 
   file-uri-to-path@1.0.0: {}
 
-  firebase-admin@14.5.0(@firebase/app-compat@0.5.18)(@firebase/app@0.16.2):
+  firebase-admin@14.5.1(@firebase/app-compat@0.5.18)(@firebase/app@0.16.2):
     dependencies:
       '@fastify/busboy': 3.2.3
       '@firebase/database-compat': 2.1.7(@firebase/app-compat@0.5.18)(@firebase/app@0.16.2)
