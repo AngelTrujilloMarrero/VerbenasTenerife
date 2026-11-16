@@ -16,7 +16,7 @@
     "fb:importar": "node scripts/importar-seguidos.mjs"
   },
   "dependencies": {
-    "astro": "^7.4.4",
+    "astro": "^7.4.11",
     "cheerio": "^1.2.0",
     "firebase": "^12.19.0",
     "firebase-admin": "^14.5.0",
